@@ -8,7 +8,7 @@ config_version=5
 [application]
 
 config/name="PixelBrawl"
-run/main_scene="res://scenes/Match.tscn"
+run/main_scene="res://scenes/Main.tscn"
 config/features=PackedStringArray("4.7", "Forward Plus")
 
 [display]
@@ -30,3 +30,4 @@ textures/canvas_textures/default_texture_filter=0
 
 Settings="*res://scripts/Settings.gd"
 Characters="*res://scripts/Characters.gd"
+Audio="*res://scripts/Audio.gd"

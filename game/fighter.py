@@ -67,7 +67,7 @@ class Fighter:
         self.knocked_down = False
         self.victory = False    # mac sonu kazanan sevinme pozu
         self.combo_count = 0    # bu dovuscunun SALDIRAN olarak surdurdugu kombo
-        self.meter = 0          # super metre (ozel hareket icin)
+        self.meter = settings.SUPER_START   # super metre (round basi dolu baslar)
         self._special = None    # su an yapilan SpecialSpec (SPECIAL durumu)
         self._special_ex = False   # metre doluyken guclendirilmis (EX) ates
         self.spawn_special = None  # mermi cikis sinyali; match okuyup temizler
@@ -279,10 +279,10 @@ class Fighter:
         elif (inputs.weapon and self.data.weapon is not None
                 and self.meter >= self.data.weapon.meter_cost):
             self._start_weapon()
-        elif inputs.punch:
+        elif inputs.punch or inputs.special:   # ozel niyeti + metre yok -> yumruk
             atk = self.data.crouch_punch if inputs.down else self.data.punch
             self._start_attack(State.PUNCH, atk, airborne=False)
-        elif inputs.kick:
+        elif inputs.kick or inputs.weapon:     # silah niyeti + metre yok -> tekme
             atk = self.data.sweep if inputs.down else self.data.kick
             self._start_attack(State.KICK, atk, airborne=False)
         elif inputs.jump and not inputs.down:

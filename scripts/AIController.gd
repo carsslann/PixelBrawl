@@ -3,8 +3,8 @@ extends RefCounted
 ## controller.py AIController birebir — kural tabanli bot, 3 zorluk.
 
 const DIFFICULTIES := {
-	"kolay": {"decision_interval": 32, "reaction": 26, "aggression": 0.16,
-		"block_prob": 0.05, "jump_prob": 0.03, "retreat_prob": 0.30, "idle_prob": 0.45},
+	"kolay": {"decision_interval": 38, "reaction": 30, "aggression": 0.10,
+		"block_prob": 0.03, "jump_prob": 0.02, "retreat_prob": 0.34, "idle_prob": 0.60},
 	"orta": {"decision_interval": 16, "reaction": 18, "aggression": 0.42,
 		"block_prob": 0.28, "jump_prob": 0.07, "retreat_prob": 0.16, "idle_prob": 0.05},
 	"zor": {"decision_interval": 14, "reaction": 12, "aggression": 0.55,
@@ -79,10 +79,10 @@ func get_inputs(me: Fighter, opp: Fighter) -> Inputs:
 		want_attack = ""
 		move = 0
 
-	# ozel ates: metre dolu + orta mesafe -> ara sira firlat
+	# ozel ates: metre dolu + orta mesafe -> ara sira firlat (zorlukla olcekli)
 	if me.data.special != null and me.meter >= me.data.special.meter_cost \
 			and (me.state == Fighter.State.IDLE or me.state == Fighter.State.WALK) \
-			and gap > 120 and randf() < 0.03:
+			and gap > 120 and randf() < float(p["aggression"]) * 0.05:
 		inp.special = true
 		inp.move = 0
 		return inp

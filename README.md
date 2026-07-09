@@ -75,6 +75,9 @@ savunmasızsın.
 
 **Süper metre:** can barının altındaki bar; vuruş verince/yiyince dolar (dolunca
 sarı). Özel ateş/silah harcar, dolu bar = EX. Bot da metresi dolunca kullanır.
+**Round başı yarıdan fazla dolu başlar** — özel ateşi hemen deneyebilirsin.
+Komut toleranslıdır: S basılıyken bile `↓ → J` çalışır; metre yoksa giriş
+otomatik normal yumruğa düşer.
 
 **Blok:** rakibin tersine bastığın sürece bloklarsın; hasarın ~%85'ini keser
 (kalan "chip"). Doğru yükseklikte bloklamak şart: alçağı çömelerek, overhead'i

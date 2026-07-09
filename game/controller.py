@@ -55,10 +55,10 @@ P2_KEYS = {
 
 
 class HumanController(Controller):
-    # ozel ates komutu: ↓ sonra ILERI (rakibe dogru), ardindan yumruk —
-    # basitleStirilmis quarter-circle-forward. Girdi tamponu son kareleri tutar.
-    QCF_DOWN_WINDOW = 18   # ↓ tuSundan yumruga izin verilen azami kare
-    QCF_FWD_WINDOW = 12    # ILERI'den yumruga izin verilen azami kare
+    # ozel ates komutu: son karelerde ↓ VE ILERI'ye dokunulup yumruga basmak.
+    # Sira/tutma serbest (↓ basiliyken → + yumruk da calisir) — toleransli.
+    QCF_DOWN_WINDOW = 18   # ↓'ye son dokunustan yumruga izin verilen azami kare
+    QCF_FWD_WINDOW = 16    # ILERI'ye son dokunustan yumruga izin verilen azami kare
 
     def __init__(self, keys=None):
         self.keys = keys or P1_KEYS
@@ -109,13 +109,12 @@ class HumanController(Controller):
         return inp
 
     def _qcf(self) -> bool:
-        return (self.t_down < self.t_fwd
-                and self.frame - self.t_down <= self.QCF_DOWN_WINDOW
+        # son karelerde hem ↓ hem ILERI'ye dokunulmus (sira/tutma serbest)
+        return (self.frame - self.t_down <= self.QCF_DOWN_WINDOW
                 and self.frame - self.t_fwd <= self.QCF_FWD_WINDOW)
 
     def _qcb(self) -> bool:
-        return (self.t_down < self.t_back
-                and self.frame - self.t_down <= self.QCF_DOWN_WINDOW
+        return (self.frame - self.t_down <= self.QCF_DOWN_WINDOW
                 and self.frame - self.t_back <= self.QCF_FWD_WINDOW)
 
 

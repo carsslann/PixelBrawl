@@ -195,6 +195,7 @@ def test_crouch_shrinks_hurtbox():
 # ---------------------------------------------------------------- ozel ates / metre
 def test_meter_gains_on_hit():
     a, b = _fresh()
+    a.meter = b.meter = 0
     _do_move(a, b, Inputs(punch=True), frames=12)
     assert a.meter == settings.SUPER_GAIN_HIT, f"vuran metre kazanmali: {a.meter}"
     assert b.meter == settings.SUPER_GAIN_TAKEN, f"yiyen metre kazanmali: {b.meter}"
@@ -205,9 +206,10 @@ def test_special_needs_meter():
     a.meter = 0
     a.update(Inputs(special=True), b)
     assert a.state != State.SPECIAL, "metre olmadan ozel yapilamaz"
-    a.meter = a.data.special.meter_cost
-    a.update(Inputs(special=True), b)
-    assert a.state == State.SPECIAL and a.meter == 0, "metre dolu ozel + metre harcanir"
+    c, _ = _fresh()
+    c.meter = c.data.special.meter_cost
+    c.update(Inputs(special=True), b)
+    assert c.state == State.SPECIAL and c.meter == 0, "metre dolu ozel + metre harcanir"
 
 
 def test_special_emits_projectile_signal():
@@ -276,6 +278,54 @@ def test_special_flow_in_match():
         if m.projectiles:
             saw_proj = True
     assert saw_proj, "ozel hareket macta mermi olusturmali"
+
+
+def _p1_pressed(*keys):
+    from game.controller import P1_KEYS
+    d = {v: False for v in P1_KEYS.values()}
+    for k in keys:
+        d[k] = True
+    return d
+
+
+def test_qcf_special_input_held_down():
+    """S BASILIYKEN ↓→+J ozel atesi vermeli (eski bug: vermiyordu)."""
+    from game.controller import HumanController, P1_KEYS
+    hc = HumanController(P1_KEYS)
+    me = Fighter(CHARACTERS[A], 400, 1)
+    opp = Fighter(CHARACTERS[A], 800, -1)   # rakip sagda -> ILERI = D (sag)
+    S, D, J = P1_KEYS["down"], P1_KEYS["right"], P1_KEYS["punch"]
+    for _ in range(2):
+        hc.get_inputs(me, opp, _p1_pressed(S), [])
+    for _ in range(2):
+        hc.get_inputs(me, opp, _p1_pressed(S, D), [])
+    inp = hc.get_inputs(me, opp, _p1_pressed(S, D),
+                        [pygame.event.Event(pygame.KEYDOWN, key=J)])
+    assert inp.special and not inp.punch, "↓ basiliyken de ↓→+J ozel vermeli"
+
+
+def test_special_without_meter_falls_back_to_punch():
+    a, b = _fresh()
+    a.meter = 0
+    a.update(Inputs(special=True), b)
+    assert a.state == State.PUNCH, "metre yoksa ozel girisi yumruga dusmeli"
+
+
+def test_qcf_fires_projectile_in_match():
+    from game.controller import HumanController, P1_KEYS
+    m = Match(A, B, HumanController(P1_KEYS), AIController("orta"), "Orta")
+    m.phase = Phase.FIGHT
+    m.p1.x, m.p2.x = 400, 830
+    S, D, J = P1_KEYS["down"], P1_KEYS["right"], P1_KEYS["punch"]
+    m.update([], _p1_pressed(S))
+    m.update([], _p1_pressed(S, D))
+    m.update([pygame.event.Event(pygame.KEYDOWN, key=J)], _p1_pressed(S, D))
+    saw = bool(m.projectiles)
+    for _ in range(30):
+        m.update([], _p1_pressed())
+        if m.projectiles:
+            saw = True
+    assert saw, "↓→+J girisi macta ozel ates mermisi olusturmali"
 
 
 def test_ex_needs_full_meter():

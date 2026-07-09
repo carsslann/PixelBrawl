@@ -26,8 +26,9 @@ BLOCK_PUSHBACK_RATIO = 0.5  # blokta geri itilme orani
 
 # Super metre (ozel hareket icin)
 SUPER_MAX = 100
-SUPER_GAIN_HIT = 7          # vurus VERINCE kazanilan metre
-SUPER_GAIN_TAKEN = 4        # vurus YIYINCE kazanilan metre
+SUPER_START = 60           # round basi metre (ozel hemen denenebilsin)
+SUPER_GAIN_HIT = 8          # vurus VERINCE kazanilan metre
+SUPER_GAIN_TAKEN = 5        # vurus YIYINCE kazanilan metre
 SUPER_BACK = (40, 40, 58)
 SUPER_FILL = (86, 190, 240)
 SUPER_FULL = (250, 224, 92)  # metre dolunca renk
