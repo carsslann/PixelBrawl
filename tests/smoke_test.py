@@ -325,6 +325,26 @@ def test_throw_needs_range():
     assert m.p2.health == hp0, "menzil disinda atma tutmamali"
 
 
+# ---------------------------------------------------------------- modlar / veri
+def test_pvp_two_humans():
+    from game.controller import HumanController, P1_KEYS, P2_KEYS
+    m = Match(A, B, HumanController(P1_KEYS), HumanController(P2_KEYS), "")
+    m.phase = Phase.FIGHT
+    surf = pygame.display.get_surface()
+    pressed = pygame.key.get_pressed()
+    for _ in range(80):
+        m.update([], pressed)
+        m.draw(surf)
+    assert m.result is None, "PvP maci iki insan kontrolcuyle sorunsuz kosmali"
+
+
+def test_character_moves_data():
+    from game.characters import character_moves
+    for key in CHARACTER_ORDER:
+        moves, combos = character_moves(key)
+        assert len(moves) >= 8 and len(combos) >= 1, f"{key} hareket verisi eksik"
+
+
 # ---------------------------------------------------------------- round akisi
 def test_ko_and_round_flow():
     m = Match(A, B, AIController("orta"), AIController("orta"), "Orta")

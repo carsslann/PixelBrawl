@@ -10,9 +10,10 @@ from enum import Enum, auto
 import pygame
 
 from . import (audio, combat, effects, fx_sprites, hud, projectile, renderer,
-               settings, stages)
-from .characters import CHARACTERS, AttackData
-from .controller import AIController, HumanController, Inputs, DIFFICULTY_LABELS
+               screens, settings, stages)
+from .characters import CHARACTERS, CHARACTER_ORDER, AttackData
+from .controller import (AIController, HumanController, Inputs,
+                         DIFFICULTY_LABELS, P1_KEYS, P2_KEYS)
 from .fighter import Fighter, State
 
 P1_START_X = settings.WIDTH * 0.32
@@ -341,21 +342,73 @@ class Match:
             self.hud.banner(surf, "DURAKLATILDI", "ESC: Devam    Q: Ana menü")
 
 
+def _run_match(screen, clock, m: "Match") -> "Match":
+    """Bir maci sonuc (result) belirlenene kadar kosar; Match'i dondurur."""
+    while m.result is None:
+        events = pygame.event.get()
+        pressed = pygame.key.get_pressed()
+        m.update(events, pressed)
+        m.draw(screen)
+        pygame.display.flip()
+        clock.tick(settings.FPS)
+    return m
+
+
 def run(screen, clock, config) -> str:
-    """Menu'den gelen secimle mac(lar)i kosar; 'menu' ya da 'quit' dondurur."""
+    """Menu secimine gore mac(lar)i kosar; 'menu' ya da 'quit' dondurur."""
+    mode = config.get("mode", "pve")
+    if mode == "arcade":
+        return run_arcade(screen, clock, config)
     while True:
-        m = Match(
-            config["p1"], config["p2"],
-            HumanController(),
-            AIController(config["difficulty"]),
-            DIFFICULTY_LABELS[config["difficulty"]],
-        )
-        while m.result is None:
+        if mode == "pvp":
+            c1 = HumanController(P1_KEYS)
+            c2 = HumanController(P2_KEYS)
+            label = ""
+        else:
+            c1 = HumanController(P1_KEYS)
+            c2 = AIController(config["difficulty"])
+            label = DIFFICULTY_LABELS[config["difficulty"]]
+        m = _run_match(screen, clock,
+                       Match(config["p1"], config["p2"], c1, c2, label))
+        if m.result != "rematch":
+            return m.result
+
+
+def run_arcade(screen, clock, config) -> str:
+    """Arcade: p1 ile 6 rakibi sirayla yen; kaybedince biter, hepsini yenince sampiyon."""
+    p1 = config["p1"]
+    difficulty = config.get("difficulty", "orta")
+    order = list(CHARACTER_ORDER)
+    for i, opp in enumerate(order):
+        if screens.banner_screen(screen, clock, [f"MAÇ {i + 1}/{len(order)}"],
+                                  sub=f"Rakip: {CHARACTERS[opp].name}") == "quit":
+            return "quit"
+        m = Match(p1, opp, HumanController(P1_KEYS),
+                  AIController(difficulty), DIFFICULTY_LABELS[difficulty])
+        while m.phase != Phase.MATCH_OVER:
             events = pygame.event.get()
             pressed = pygame.key.get_pressed()
             m.update(events, pressed)
+            if m.result == "quit":
+                return "quit"
+            if m.result == "menu":
+                return "menu"
             m.draw(screen)
             pygame.display.flip()
             clock.tick(settings.FPS)
-        if m.result != "rematch":
-            return m.result
+        # kazanani ~2.2sn goster (cheer animasyonu ilerlesin)
+        for _ in range(130):
+            for e in pygame.event.get():
+                if e.type == pygame.QUIT:
+                    return "quit"
+            m.update([], pygame.key.get_pressed())
+            m.draw(screen)
+            pygame.display.flip()
+            clock.tick(settings.FPS)
+        if m.wins[0] <= m.wins[1]:       # p1 kaybetti
+            screens.banner_screen(screen, clock, ["YENİLDİN"],
+                                  sub="Bir tuşa bas — ana menü", frames=100000)
+            return "menu"
+    screens.banner_screen(screen, clock, ["ŞAMPİYON!", CHARACTERS[p1].name],
+                          sub="Tüm rakipleri yendin! Bir tuşa bas", frames=100000)
+    return "menu"

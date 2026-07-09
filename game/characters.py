@@ -217,3 +217,37 @@ CHARACTERS = {k: dataclasses.replace(v, special=_SPECIALS[k], weapon=_WEAPONS[k]
               for k, v in CHARACTERS.items()}
 
 CHARACTER_ORDER = ["efe", "ada", "zeynep", "mira", "robo", "goron"]
+
+# Karaktere ozel ornek kombolar (N7) — hareket listesi ekraninda gosterilir
+_COMBOS = {
+    "efe":    [("Temel zincir", "J → K"), ("Jump-in", "(hava)J → J → K"),
+               ("Anti-air", "↓←K yükselen")],
+    "ada":    [("Hilal bitiris", "J → K → ↓←K"), ("Ateşle bitir", "J → K → ↓→J")],
+    "zeynep": [("Hızlı zincir", "J → J → K"), ("Atılma", "↓J → ↓←K"),
+               ("Ateş baskı", "J → ↓→J")],
+    "mira":   [("Çift hilal", "J → ↓←K"), ("Jump-in", "(hava)K → J → ↓K")],
+    "robo":   [("Ağır zincir", "J → K"), ("EX ateş", "(dolu)↓→J")],
+    "goron":  [("Ağır bitiris", "J → ↓K süpürme"), ("Alev sütunu", "↓←K")],
+}
+
+# fx renk index -> Turkce ad (ozel ates)
+COLOR_NAMES = {0: "altın", 7: "bordo", 2: "mavi", 5: "mor", 6: "çelik", 3: "yeşil"}
+
+
+def character_moves(key: str):
+    """(hareketler, kombolar) — move-list ekrani icin. hareket = (ad, komut)."""
+    c = CHARACTERS[key]
+    color = COLOR_NAMES.get(c.special.color, "") if c.special else ""
+    moves = [
+        ("Yürü", "A / D"),
+        ("Zıpla / Çömel", "W / S"),
+        ("Blok", "geri tut"),
+        ("Yumruk / Tekme", "J / K"),
+        ("Alçak / Süpürme", "S+J / S+K"),
+        ("Hava saldırı", "(havada) J / K"),
+        ("Atma (bloklanamaz)", "J + K"),
+        (f"Özel ateş ({color})", "↓ → + J"),
+        (f"Özel silah ({c.weapon.attack.name})" if c.weapon else "Özel silah", "↓ ← + K"),
+        ("EX ateş (dolu metre)", "↓ → + J"),
+    ]
+    return moves, _COMBOS.get(key, [])

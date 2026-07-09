@@ -31,8 +31,17 @@ py main.py
 | J + K | Atma (bloklanamaz, yakın) |
 | ESC | Duraklat / devam (duraklatmada Q: ana menü) |
 
-Menüde ok tuşları / WASD ile karakterini, rakibini ve bot zorluğunu
-seç, ENTER ile başla. Maç sonu ENTER = tekrar, ESC = menü.
+Menüde ok tuşları / WASD ile **mod**, karakter, rakip ve zorluğu seç,
+ENTER ile başla. **H** ile seçili karakterin hareket listesini gör.
+Maç sonu ENTER = tekrar, ESC = menü.
+
+## Modlar
+
+- **Tek Kişi (Bot):** sen vs bot (3 zorluk).
+- **2 Kişi (PvP):** aynı klavyede iki oyuncu. **1. oyuncu:** WASD + J/K.
+  **2. oyuncu:** ok tuşları + `,` (yumruk) / `.` (tekme), yön komutları aynı.
+- **Arcade:** seçtiğin karakterle 6 rakibi sırayla yen; kaybedince biter,
+  hepsini geçersen ŞAMPİYON.
 
 ## Hareketler ve kombolar
 

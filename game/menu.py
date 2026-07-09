@@ -2,17 +2,22 @@
 
 import pygame
 
-from . import audio, settings, sprites
+from . import audio, screens, settings, sprites
 from .characters import CHARACTERS, CHARACTER_ORDER
 from .controller import DIFFICULTY_LABELS, DIFFICULTY_ORDER
 from .hud import load_font
 
+MODES = ["pve", "pvp", "arcade"]
+MODE_LABELS = {"pve": "Tek Kişi (Bot)", "pvp": "2 Kişi (PvP)", "arcade": "Arcade"}
+
 
 class Menu:
     def __init__(self):
-        self.rows = ["p1", "p2", "difficulty"]
-        self.row_labels = {"p1": "KARAKTERİN", "p2": "RAKİP", "difficulty": "ZORLUK"}
+        self.rows = ["mode", "p1", "p2", "difficulty"]
+        self.row_labels = {"mode": "MOD", "p1": "KARAKTERİN",
+                           "p2": "RAKİP", "difficulty": "ZORLUK"}
         self.selected_row = 0
+        self.mode_idx = 0
         self.p1_idx = 0
         self.p2_idx = 1
         self.diff_idx = 1  # orta
@@ -40,10 +45,16 @@ class Menu:
                     if e.key == pygame.K_RETURN:
                         audio.play("menu_select")
                         return {
+                            "mode": MODES[self.mode_idx],
                             "p1": CHARACTER_ORDER[self.p1_idx],
                             "p2": CHARACTER_ORDER[self.p2_idx],
                             "difficulty": DIFFICULTY_ORDER[self.diff_idx],
                         }
+                    if e.key == pygame.K_h:   # hareket listesi (secili karakter)
+                        if screens.move_list_screen(
+                                screen, clock,
+                                CHARACTER_ORDER[self.p1_idx]) == "quit":
+                            return None
                     if e.key in (pygame.K_UP, pygame.K_w):
                         self.selected_row = (self.selected_row - 1) % len(self.rows)
                         audio.play("menu_move")
@@ -62,7 +73,9 @@ class Menu:
 
     def _change(self, step: int):
         row = self.rows[self.selected_row]
-        if row == "p1":
+        if row == "mode":
+            self.mode_idx = (self.mode_idx + step) % len(MODES)
+        elif row == "p1":
             self.p1_idx = (self.p1_idx + step) % len(CHARACTER_ORDER)
         elif row == "p2":
             self.p2_idx = (self.p2_idx + step) % len(CHARACTER_ORDER)
@@ -71,6 +84,8 @@ class Menu:
 
     # ------------------------------------------------------------------
     def _row_value(self, row: str) -> str:
+        if row == "mode":
+            return MODE_LABELS[MODES[self.mode_idx]]
         if row == "p1":
             return CHARACTERS[CHARACTER_ORDER[self.p1_idx]].name
         if row == "p2":
@@ -125,7 +140,7 @@ class Menu:
                                    (x, body.top - data.width // 4), data.width // 3)
 
         helps = [
-            "ENTER: Başla      ESC: Çıkış      Ok tuşları / WASD: Seçim",
+            "ENTER: Başla    ESC: Çıkış    H: Hareket listesi    Ok/WASD: Seçim",
             "A/D yürü   W zıpla   S çömel   J yumruk   K tekme   (geri tut = blok)   ESC duraklat",
             "Kombo: çömel+vuruş = alçak · zıpla+vuruş = overhead · isabette zincir (yumruk→tekme)",
         ]

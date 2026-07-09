@@ -43,6 +43,16 @@ P1_KEYS = {
     "kick": pygame.K_k,
 }
 
+# 2. oyuncu (PvP): ok tuslari + , / .
+P2_KEYS = {
+    "left": pygame.K_LEFT,
+    "right": pygame.K_RIGHT,
+    "jump": pygame.K_UP,
+    "down": pygame.K_DOWN,
+    "punch": pygame.K_COMMA,
+    "kick": pygame.K_PERIOD,
+}
+
 
 class HumanController(Controller):
     # ozel ates komutu: ↓ sonra ILERI (rakibe dogru), ardindan yumruk —
