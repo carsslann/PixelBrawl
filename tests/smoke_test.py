@@ -16,8 +16,8 @@ import pygame  # noqa: E402
 pygame.init()
 pygame.display.set_mode((1280, 720))
 
-from game import combat, effects, settings, sprites  # noqa: E402
-from game.characters import CHARACTERS, CHARACTER_ORDER  # noqa: E402
+from game import combat, effects, projectile, settings, sprites  # noqa: E402
+from game.characters import CHARACTERS, CHARACTER_ORDER, AttackData  # noqa: E402
 from game.controller import AIController, Inputs  # noqa: E402
 from game.fighter import Fighter, State  # noqa: E402
 from game.match import Match, Phase  # noqa: E402
@@ -190,6 +190,92 @@ def test_crouch_shrinks_hurtbox():
     stand_h = f.hurtbox().height
     f.set_state(State.CROUCH)
     assert f.hurtbox().height < stand_h, "cömelince hurtbox alcalmali"
+
+
+# ---------------------------------------------------------------- ozel ates / metre
+def test_meter_gains_on_hit():
+    a, b = _fresh()
+    _do_move(a, b, Inputs(punch=True), frames=12)
+    assert a.meter == settings.SUPER_GAIN_HIT, f"vuran metre kazanmali: {a.meter}"
+    assert b.meter == settings.SUPER_GAIN_TAKEN, f"yiyen metre kazanmali: {b.meter}"
+
+
+def test_special_needs_meter():
+    a, b = _fresh()
+    a.meter = 0
+    a.update(Inputs(special=True), b)
+    assert a.state != State.SPECIAL, "metre olmadan ozel yapilamaz"
+    a.meter = a.data.special.meter_cost
+    a.update(Inputs(special=True), b)
+    assert a.state == State.SPECIAL and a.meter == 0, "metre dolu ozel + metre harcanir"
+
+
+def test_special_emits_projectile_signal():
+    a, b = _fresh()
+    a.meter = a.data.special.meter_cost
+    a.update(Inputs(special=True), b)
+    fired = False
+    for _ in range(a.data.special.total + 2):
+        a.update(Inputs(), b)
+        if a.spawn_special is not None:
+            fired = True
+            a.spawn_special = None
+    assert fired, "ozel hareket cast karesinde mermi sinyali vermeli"
+
+
+def test_projectile_hits_opponent():
+    a, b = _fresh(ax=400, bx=720)
+    spec = a.data.special
+    proj = projectile.make_fireball(a.x + 40, a.y - a.data.height * 0.55, 1,
+                                    spec.color, spec.damage, a, speed=spec.speed,
+                                    hit_w=spec.hit_w, hit_h=spec.hit_h)
+    proj.attack = AttackData("özel", spec.damage, 0, 1, 0, spec.hitstun,
+                             spec.knockback, spec.hit_w, spec.hit_h, 0.55, guard="high")
+    hp0 = b.health
+    hit = False
+    for _ in range(90):
+        proj.update()
+        if combat.resolve_projectiles([proj], a, b):
+            hit = True
+            break
+    assert hit and b.health == hp0 - spec.damage, "mermi rakibe hasar vermeli"
+    assert not proj.alive, "isabet eden mermi ölmeli"
+
+
+def test_projectile_blocked_is_chip():
+    a, b = _fresh(ax=400, bx=680)
+    b.set_state(State.BLOCK); b.blocking = True   # ayakta blok (ates=yuksek)
+    spec = a.data.special
+    proj = projectile.make_fireball(a.x + 40, a.y - a.data.height * 0.55, 1,
+                                    spec.color, spec.damage, a, speed=spec.speed,
+                                    hit_w=spec.hit_w, hit_h=spec.hit_h)
+    proj.attack = AttackData("özel", spec.damage, 0, 1, 0, spec.hitstun,
+                             spec.knockback, spec.hit_w, spec.hit_h, 0.55, guard="high")
+    hp0 = b.health
+    for _ in range(90):
+        proj.update()
+        combat.resolve_projectiles([proj], a, b)
+        b.set_state(State.BLOCK); b.blocking = True  # blogu koru
+        if proj.has_hit:
+            break
+    dealt = hp0 - b.health
+    assert 0 < dealt <= max(1, round(spec.damage * settings.CHIP_DAMAGE_RATIO)), \
+        f"bloklanan ates chip olmali: {dealt}"
+
+
+def test_special_flow_in_match():
+    m = Match(A, B, AIController("orta"), AIController("orta"), "Orta")
+    m.phase = Phase.FIGHT
+    m.p1.x, m.p2.x = 380, 780
+    m.p1.meter = m.p1.data.special.meter_cost
+    m.p1._start_special()
+    pressed = pygame.key.get_pressed()
+    saw_proj = False
+    for _ in range(140):
+        m.update([], pressed)
+        if m.projectiles:
+            saw_proj = True
+    assert saw_proj, "ozel hareket macta mermi olusturmali"
 
 
 # ---------------------------------------------------------------- round akisi

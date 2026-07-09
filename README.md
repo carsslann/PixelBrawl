@@ -46,6 +46,13 @@ savunmasızsın.
   daha ağır bir vuruşa iptal edilebilir (yumruk → tekme/süpürme). Zıpla-vur
   ile başlayıp yere inince yer vuruşuyla devam = jump-in kombo. Kombodaki
   sonraki vuruşlar kademeli olarak daha az hasar verir (sonsuz kombo yok).
+- **Özel ateş (mermi):** komut **↓ → + J** (aşağı, sonra rakibe doğru, sonra
+  yumruk — quarter-circle-forward). Süper metre yeterliyse karakterin renkli
+  ateş topunu fırlatır; blokla kesilebilir (chip). Her karakterin rengi/hızı/
+  hasarı farklı (ROBO yavaş-güçlü, ZEYNEP hızlı-zayıf).
+
+**Süper metre:** can barının altındaki bar; vuruş verince/yiyince dolar,
+özel ateş harcar (dolunca sarı). Bot da metresi dolunca ara sıra ateş açar.
 
 **Blok:** rakibin tersine bastığın sürece bloklarsın; hasarın ~%85'ini keser
 (kalan "chip"). Doğru yükseklikte bloklamak şart: alçağı çömelerek, overhead'i
@@ -94,6 +101,8 @@ game/
   renderer.py      TEK çizim kapısı: sprite + hareket izi; sahne parallax'ı stages'e devreder
   sprites.py       Kenney poz-başına PNG yükleyici + animasyon (kazanma cheer dahil)
   stages.py        10 sahne + PARALLAX (Scene: derinlikli katmanlar, kamera salınımı)
+  projectile.py    uçan mermi (özel ateş) sınıfı + make_fireball fabrikası
+  fx_sprites.py    atesefekt sheet yükleyici (renk başına ateş topu / patlama)
   menu.py          karakter / rakip / zorluk seçim ekranı (sprite önizlemeli)
 charac/            Kenney "Toon Characters" sprite paketi (CC0) — bkz. Krediler
 backgroundpack/    Kenney "Background elements" paketi (CC0) — sahne görselleri

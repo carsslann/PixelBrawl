@@ -42,6 +42,8 @@ class HUD:
     def draw(self, surf, timer_seconds: int, wins, round_num: int):
         self._draw_bar(surf, self.p1, self.lag[0], left=True)
         self._draw_bar(surf, self.p2, self.lag[1], left=False)
+        self._draw_meter(surf, self.p1, left=True)
+        self._draw_meter(surf, self.p2, left=False)
         self._draw_timer(surf, timer_seconds)
         self._draw_wins(surf, wins)
         # ust bilgi satiri
@@ -49,7 +51,7 @@ class HUD:
         if self.difficulty_label:
             info += f"  •  Bot: {self.difficulty_label}"
         self._shadow_text(surf, self.font_small, info, settings.WHITE,
-                          midtop=(settings.WIDTH // 2, BAR_Y + BAR_H + 26))
+                          midtop=(settings.WIDTH // 2, BAR_Y + BAR_H + 34))
 
     @staticmethod
     def _shadow_text(surf, font, text, color, **anchor):
@@ -79,13 +81,28 @@ class HUD:
             pygame.draw.rect(surf, color, rect)
         pygame.draw.rect(surf, settings.HP_BORDER, back, 3)
 
-        ny = BAR_Y + BAR_H + 6
+        ny = BAR_Y + BAR_H + 16
         if left:
             self._shadow_text(surf, self.font_name, fighter.data.name,
                               settings.WHITE, topleft=(x + 2, ny))
         else:
             self._shadow_text(surf, self.font_name, fighter.data.name,
                               settings.WHITE, topright=(x + BAR_W - 2, ny))
+
+    def _draw_meter(self, surf, fighter, left: bool):
+        mw, mh = int(BAR_W * 0.66), 9
+        x = 40 if left else settings.WIDTH - 40 - mw
+        y = BAR_Y + BAR_H + 4
+        back = pygame.Rect(x, y, mw, mh)
+        pygame.draw.rect(surf, settings.SUPER_BACK, back)
+        frac = max(0.0, min(1.0, fighter.meter / settings.SUPER_MAX))
+        fw = int(mw * frac)
+        if fw > 0:
+            full = fighter.meter >= settings.SUPER_MAX
+            color = settings.SUPER_FULL if full else settings.SUPER_FILL
+            fr = pygame.Rect(x if left else x + mw - fw, y, fw, mh)
+            pygame.draw.rect(surf, color, fr)
+        pygame.draw.rect(surf, settings.HP_BORDER, back, 2)
 
     def _draw_timer(self, surf, seconds: int):
         text = self.font_timer.render(f"{max(0, seconds):02d}", True, settings.TIMER_COLOR)

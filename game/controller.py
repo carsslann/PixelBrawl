@@ -21,6 +21,7 @@ class Inputs:
     kick: bool = False
     down: bool = False   # comelme (insan: S)
     block: bool = False  # dogrudan blok (bot kullanir; insan GERI tutarak bloklar)
+    special: bool = False  # ozel ates (insan: ↓ → + yumruk; bot: ara sira)
 
 
 class Controller:
@@ -42,24 +43,49 @@ P1_KEYS = {
 
 
 class HumanController(Controller):
+    # ozel ates komutu: ↓ sonra ILERI (rakibe dogru), ardindan yumruk —
+    # basitleStirilmis quarter-circle-forward. Girdi tamponu son kareleri tutar.
+    QCF_DOWN_WINDOW = 18   # ↓ tuSundan yumruga izin verilen azami kare
+    QCF_FWD_WINDOW = 12    # ILERI'den yumruga izin verilen azami kare
+
     def __init__(self, keys=None):
         self.keys = keys or P1_KEYS
+        self.frame = 0
+        self.t_down = -999   # son ↓ karesi
+        self.t_fwd = -999    # son ILERI karesi
 
     def get_inputs(self, me, opponent, pressed, events) -> Inputs:
         inp = Inputs()
+        self.frame += 1
         inp.move = ((1 if pressed[self.keys["right"]] else 0)
                     - (1 if pressed[self.keys["left"]] else 0))
         inp.down = bool(pressed[self.keys["down"]])
+        # yon tamponu: ↓ ve ILERI (rakibe dogru) basimlarini zaman damgala
+        fwd = 1 if opponent.x >= me.x else -1
+        if inp.down:
+            self.t_down = self.frame
+        if inp.move == fwd:
+            self.t_fwd = self.frame
         # blok: rakibe göre GERI yönü tutmak (fighter cozer); ayri tuS yok
         for e in events:
             if e.type == pygame.KEYDOWN:
                 if e.key == self.keys["jump"]:
                     inp.jump = True
-                elif e.key == self.keys["punch"]:
-                    inp.punch = True
                 elif e.key == self.keys["kick"]:
                     inp.kick = True
+                elif e.key == self.keys["punch"]:
+                    if self._qcf():
+                        inp.special = True
+                        self.t_down = self.t_fwd = -999  # tekrar tetiklenmesin
+                    else:
+                        inp.punch = True
         return inp
+
+    def _qcf(self) -> bool:
+        # ↓ ONCE, sonra ILERI, sonra yumruk — hepsi pencere icinde
+        return (self.t_down < self.t_fwd
+                and self.frame - self.t_down <= self.QCF_DOWN_WINDOW
+                and self.frame - self.t_fwd <= self.QCF_FWD_WINDOW)
 
 
 # ----------------------------------------------------------------------
@@ -108,6 +134,13 @@ class AIController(Controller):
 
         gap = abs(opp.x - me.x) - (me.data.width + opp.data.width) / 2
         toward = 1 if opp.x >= me.x else -1
+
+        # metre doluysa ara sira ozel ates (uzak-orta mesafe, bloklanabilir)
+        if (me.data.special is not None and me.meter >= me.data.special.meter_cost
+                and me.state in (State.IDLE, State.WALK)
+                and 120 < gap < 520 and random.random() < 0.03):
+            inp.special = True
+            return inp
 
         # rakip saldiriya yeni mi gecti? -> blok karari
         opp_attacking = opp.state in (State.PUNCH, State.KICK)

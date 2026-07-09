@@ -9,8 +9,8 @@ from enum import Enum, auto
 
 import pygame
 
-from . import audio, combat, effects, hud, renderer, settings, stages
-from .characters import CHARACTERS
+from . import audio, combat, effects, hud, projectile, renderer, settings, stages
+from .characters import CHARACTERS, AttackData
 from .controller import AIController, HumanController, Inputs, DIFFICULTY_LABELS
 from .fighter import Fighter, State
 
@@ -57,6 +57,7 @@ class Match:
         self.renderer = renderer.Renderer(self.stage)
         self.effects = effects.EffectSystem()
         self.effects.set_ambient(AMBIENT_BY_STAGE.get(self.stage, "leaves"))
+        self.projectiles = []                # ucan ozel ates mermileri
 
     # ------------------------------------------------------------------
     def start_round(self):
@@ -65,6 +66,8 @@ class Match:
         self.hud.lag = [float(self.p1.health), float(self.p2.health)]
         self.timer_frames = settings.ROUND_TIME * settings.FPS
         self.hitstop = 0
+        self.slowmo = 0
+        self.projectiles.clear()
         self.effects.reset()
         self.phase = Phase.INTRO
         self.phase_frame = 0
@@ -103,9 +106,11 @@ class Match:
                 self.p1.update(i1, self.p2)
                 self.p2.update(i2, self.p1)
                 self._whoosh_check()
+                self._handle_specials()
                 hit_events = combat.resolve_hits(self.p1, self.p2)
                 combat.push_apart(self.p1, self.p2)
                 self._spawn_hit_effects(hit_events)
+                self._update_projectiles()
                 self._spawn_movement_dust()
                 self._decay_combos()
                 self.timer_frames -= 1
@@ -165,6 +170,34 @@ class Match:
             if atk and not self._prev_attacking[i]:
                 audio.play("whoosh", 0.6)
             self._prev_attacking[i] = atk
+
+    def _handle_specials(self):
+        """Dovuscunun ozel ates sinyalini okuyup mermi olusturur."""
+        for f in (self.p1, self.p2):
+            if f.spawn_special is None:
+                continue
+            spec = f.spawn_special
+            f.spawn_special = None
+            px = f.x + f.facing * (f.data.width * 0.6)
+            py = f.y - f.data.height * 0.55
+            proj = projectile.make_fireball(px, py, f.facing, spec.color,
+                                            spec.damage, f, speed=spec.speed,
+                                            hit_w=spec.hit_w, hit_h=spec.hit_h)
+            # combat'in isabet cozumu icin hafif bir AttackData ekle
+            proj.attack = AttackData("özel ateş", spec.damage, 0, 1, 0,
+                                     spec.hitstun, spec.knockback, spec.hit_w,
+                                     spec.hit_h, 0.55, guard="high")
+            self.projectiles.append(proj)
+            audio.play("whoosh", 0.85)
+
+    def _update_projectiles(self):
+        if not self.projectiles:
+            return
+        for proj in self.projectiles:
+            proj.update()
+        events = combat.resolve_projectiles(self.projectiles, self.p1, self.p2)
+        self._spawn_hit_effects(events)
+        self.projectiles = [p for p in self.projectiles if p.alive]
 
     def _decay_combos(self):
         """Bir dovuscu hitstun'dan cikinca rakibinin kombosunu sifirla."""
@@ -234,6 +267,8 @@ class Match:
         for f in order:
             self.renderer.draw_fighter(surf, f, ox, oy)
         self.effects.draw_world(surf, ox, oy)  # kivilcim/toz (sarsintiya dahil)
+        for proj in self.projectiles:          # ucan mermiler
+            proj.draw(surf, ox, oy)
         self.renderer.draw_foreground(surf, self.cam_x)  # on plan (dovusculerin ONUNDE)
         seconds = -(-self.timer_frames // settings.FPS)  # ceil
         self.hud.draw(surf, seconds, self.wins, self.round_num)

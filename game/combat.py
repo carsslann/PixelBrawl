@@ -67,11 +67,49 @@ def _apply(attacker: Fighter, defender: Fighter, attack) -> HitEvent:
         dmg = max(1, round(attack.damage * scale))
 
     defender.take_hit(attack, attacker.facing, blocked, dmg)
+    attacker.meter = min(settings.SUPER_MAX, attacker.meter + settings.SUPER_GAIN_HIT)
+    defender.meter = min(settings.SUPER_MAX, defender.meter + settings.SUPER_GAIN_TAKEN)
     heavy = attack.knockback >= 9.0 or attack.knockdown
     return HitEvent(cx, cy, dmg, blocked, heavy,
                     ko=(defender.state == State.KO), attacker=attacker,
                     combo=attacker.combo_count,
                     knockdown=attack.knockdown and not blocked)
+
+
+def resolve_projectiles(projectiles, p1, p2) -> list[HitEvent]:
+    """Mermilerin rakip hurtbox'una isabetini cozer (sahibine vurmaz)."""
+    events: list[HitEvent] = []
+    for proj in projectiles:
+        if not proj.alive or proj.has_hit:
+            continue
+        defender = p2 if proj.owner is p1 else p1
+        if defender.state == State.KO:
+            continue
+        if proj.hitbox().colliderect(defender.hurtbox()):
+            proj.register_hit()   # has_hit=True (+ tek-isabet ise alive=False)
+            events.append(_apply_projectile(proj, defender))
+    return events
+
+
+def _apply_projectile(proj, defender) -> HitEvent:
+    box = defender.hurtbox()
+    clip = proj.hitbox().clip(box)
+    cx = clip.centerx if clip.width else box.centerx
+    cy = clip.centery if clip.height else box.centery
+    facing = 1 if proj.vx >= 0 else -1
+    stance = defender.block_stance()
+    blocked = stance is not None and _guard_ok(stance, "high")  # ates = yuksek
+    if blocked:
+        dmg = max(1, round(proj.damage * settings.CHIP_DAMAGE_RATIO))
+    else:
+        dmg = proj.damage
+    defender.take_hit(proj.attack, facing, blocked, dmg)
+    owner = proj.owner
+    owner.meter = min(settings.SUPER_MAX, owner.meter + settings.SUPER_GAIN_HIT)
+    defender.meter = min(settings.SUPER_MAX, defender.meter + settings.SUPER_GAIN_TAKEN)
+    return HitEvent(cx, cy, dmg, blocked, heavy=True,
+                    ko=(defender.state == State.KO), attacker=owner,
+                    combo=1, knockdown=False)
 
 
 def _hit_point(attacker: Fighter, defender: Fighter):

@@ -44,6 +44,29 @@ class AttackData:
 
 
 @dataclass(frozen=True)
+class SpecialSpec:
+    """Karaktere ozel ates (projectile) hareketi."""
+    color: int          # atesefekt renk index'i (0..7)
+    damage: int
+    speed: float        # merminin yatay hizi (px/kare)
+    cast: int           # kac karede mermi cikar
+    recovery: int       # cikis sonrasi toparlanma
+    meter_cost: int
+    knockback: float
+    hitstun: int
+    hit_w: int = 48
+    hit_h: int = 40
+
+    @property
+    def total(self) -> int:
+        return self.cast + self.recovery
+
+
+def _special(color, damage, speed, cast, recovery, cost, knockback, hitstun):
+    return SpecialSpec(color, damage, speed, cast, recovery, cost, knockback, hitstun)
+
+
+@dataclass(frozen=True)
 class CharacterData:
     key: str
     name: str
@@ -57,6 +80,7 @@ class CharacterData:
     punch: AttackData
     kick: AttackData
     sprite: SpriteRef | None = None
+    special: SpecialSpec | None = None
 
     # --- turetilmis saldirilar (comelme / hava) --------------------------
     # Temel yumruk/tekmeden hesaplanir; ayri veri tutmaya gerek yok.
@@ -151,5 +175,18 @@ CHARACTERS = {
         sprite=SpriteRef("charac/Zombie", "character_zombie", 1.18),
     ),
 }
+
+# Karaktere ozel ates (kullanicinin renk/ozel tablosu):
+# efe=altin(0) ada=bordo(7) zeynep=mavi(2) mira=mor(5) robo=celik(6) goron=yesil(3)
+_SPECIALS = {
+    "efe":    _special(0, 14, 9.0,  14, 20, 50, 7.0, 18),
+    "ada":    _special(7, 14, 9.0,  14, 20, 50, 7.0, 18),
+    "zeynep": _special(2, 10, 13.0, 10, 16, 40, 5.5, 14),
+    "mira":   _special(5, 11, 12.0, 11, 17, 42, 6.0, 15),
+    "robo":   _special(6, 19, 6.5,  18, 24, 55, 9.5, 22),
+    "goron":  _special(3, 16, 7.5,  16, 22, 52, 8.5, 20),
+}
+CHARACTERS = {k: dataclasses.replace(v, special=_SPECIALS[k])
+              for k, v in CHARACTERS.items()}
 
 CHARACTER_ORDER = ["efe", "ada", "zeynep", "mira", "robo", "goron"]

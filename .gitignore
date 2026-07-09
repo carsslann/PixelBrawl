@@ -16,3 +16,6 @@ Desktop.ini
 # Oyun ciktisi / gecici
 *.log
 shot_*.png
+
+# Godot (import cache — asset yanindaki *.import dosyalari commit'lenir)
+/.godot/

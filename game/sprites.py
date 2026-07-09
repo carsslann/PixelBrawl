@@ -34,6 +34,7 @@ STATE_POSES = {
     # PUNCH/KICK ozel: kareler saldirinin startup->recovery suresine yayilir
     State.PUNCH:   (["attack0", "attack1", "attack2"], 0, False),
     State.KICK:    (["attack1", "kick", "kick"], 0, False),
+    State.SPECIAL: (["attack1", "attack2"], 6, False),  # ates savurma pozu
 }
 # yere serilince (supurme) gosterilecek pozlar
 KNOCKDOWN_POSES = ["hurt", "fallDown"]

@@ -28,6 +28,7 @@ class State(Enum):
     JUMP = auto()
     PUNCH = auto()
     KICK = auto()
+    SPECIAL = auto()   # ozel ates (mermi) hareketi
     BLOCK = auto()
     HITSTUN = auto()
     KO = auto()
@@ -64,6 +65,9 @@ class Fighter:
         self.knocked_down = False
         self.victory = False    # mac sonu kazanan sevinme pozu
         self.combo_count = 0    # bu dovuscunun SALDIRAN olarak surdurdugu kombo
+        self.meter = 0          # super metre (ozel hareket icin)
+        self._special = None    # su an yapilan SpecialSpec (SPECIAL durumu)
+        self.spawn_special = None  # mermi cikis sinyali; match okuyup temizler
         # yalnizca gorsel katmanin kullandigi sayaclar/olaylar
         self.hit_flash = 0
         self.block_flash = 0
@@ -133,6 +137,8 @@ class Fighter:
         self.hit_flash = 6
         self.attack = None
         self.attack_airborne = False
+        self._special = None       # ozel hareket kesintiye ugradi
+        self.spawn_special = None
         self.blocking = False
         if self.health <= 0:
             self.set_state(State.KO)
@@ -156,6 +162,25 @@ class Fighter:
         if not airborne:
             self.vx = 0.0
         self.set_state(state)
+
+    def _start_special(self):
+        spec = self.data.special
+        self.meter = max(0, self.meter - spec.meter_cost)
+        self._special = spec
+        self.spawn_special = None
+        self.attack = None
+        self.vx = 0.0
+        self.set_state(State.SPECIAL)
+
+    def _update_special(self):
+        self.vx = 0.0
+        spec = self._special
+        if spec is None or self.state_frame >= spec.total:
+            self._special = None
+            self.set_state(State.IDLE)
+        elif self.state_frame == spec.cast:
+            self.spawn_special = spec   # match bu sinyalle mermiyi olusturur
+        self._physics()
 
     # ------------------------------------------------------------------
     # ana guncelleme (karede bir)
@@ -189,6 +214,10 @@ class Fighter:
             self._update_attack(inputs)
             return
 
+        if self.state == State.SPECIAL:
+            self._update_special()
+            return
+
         if self.state == State.JUMP:
             # havada tek bir saldiri hakki
             if not self.attack_airborne and (inputs.punch or inputs.kick):
@@ -207,7 +236,10 @@ class Fighter:
         holding_back = inputs.move != 0 and _sign(inputs.move) == -self.facing
         block_req = bool(inputs.block) or holding_back
 
-        if inputs.punch:
+        if (inputs.special and self.data.special is not None
+                and self.meter >= self.data.special.meter_cost):
+            self._start_special()
+        elif inputs.punch:
             atk = self.data.crouch_punch if inputs.down else self.data.punch
             self._start_attack(State.PUNCH, atk, airborne=False)
         elif inputs.kick:
