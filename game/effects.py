@@ -94,6 +94,58 @@ class _ImpactRing:
         surf.blit(layer, (cx - pad, cy - pad))
 
 
+class _AnimEffect:
+    """Kare-dizisi (sprite) animasyon efekti: patlama, muzzle flas vb.
+
+    Kareler disaridan verilir (fx_sprites'tan gelir, burada import edilmez).
+    (x, y) MERKEZdir. loop=False ise bir kez oynayip biter (life yok olur);
+    loop=True ise sonsuza kadar donerek oynar.
+    """
+    __slots__ = ("frames", "x", "y", "spf", "loop", "n", "_t", "idx", "life")
+
+    def __init__(self, frames, x, y, fps=24, scale=1.0, loop=False):
+        # olcekleme gerekiyorsa kareleri bir kez olcekleyip sakla
+        if scale != 1.0:
+            scaled = []
+            for f in frames:
+                w = max(1, int(f.get_width() * scale))
+                h = max(1, int(f.get_height() * scale))
+                scaled.append(pygame.transform.smoothscale(f, (w, h)))
+            self.frames = scaled
+        else:
+            self.frames = list(frames)
+        self.x, self.y = x, y
+        self.n = len(self.frames)
+        # kare basina gecen "kare" sayisi (60fps oyun dongusune gore)
+        self.spf = max(1.0, settings.FPS / max(1, fps))
+        self.loop = bool(loop)
+        self._t = 0.0          # gecen zaman (kare cinsinden)
+        self.idx = 0           # anlik kare index'i
+        self.life = 1          # >0 iken canli; loop=False'da son karede 0'lanir
+
+    def update(self):
+        if self.life <= 0:
+            return
+        self._t += 1.0
+        if self._t >= self.spf:
+            self._t -= self.spf
+            self.idx += 1
+            if self.idx >= self.n:
+                if self.loop:
+                    self.idx = 0
+                else:
+                    # son kareyi gecti -> efekt biter
+                    self.idx = self.n - 1
+                    self.life = 0
+
+    def draw(self, surf, ox, oy):
+        if self.life <= 0 or self.n == 0:
+            return
+        frame = self.frames[self.idx]
+        rect = frame.get_rect(center=(int(self.x + ox), int(self.y + oy)))
+        surf.blit(frame, rect)
+
+
 class _AmbientParticle:
     """Sahne atmosferi: yavasca suzulen yaprak/toz/kar/kor."""
     __slots__ = ("x", "y", "vx", "vy", "life", "max_life", "size", "color",
@@ -180,6 +232,7 @@ class EffectSystem:
         self.particles: list[_Particle] = []
         self.numbers: list[_DamageNumber] = []
         self.rings: list[_ImpactRing] = []          # impact halkalari
+        self.anims: list[_AnimEffect] = []          # kare-dizisi anim efektleri
         self.ambient: list[_AmbientParticle] = []   # ortam partikulleri
         self.ambient_kind = "none"                  # sahne atmosferi turu
         self._ambient_timer = 0                     # uretim sayaci
@@ -196,6 +249,7 @@ class EffectSystem:
         self.particles.clear()
         self.numbers.clear()
         self.rings.clear()
+        self.anims.clear()          # kare-dizisi anim efektlerini temizle
         self.ambient.clear()        # birikmis ambient partikulleri temizle
         self._ambient_timer = 0
         # NOT: ambient_kind sahne ayaridir, reset'te korunur
@@ -266,6 +320,18 @@ class EffectSystem:
             self.rings.append(_ImpactRing(
                 x, y, color, r0=6, r1=64, life=15, w0=5))
 
+    def spawn_anim(self, frames, x, y, fps=24, scale=1.0, loop=False):
+        """Kare-dizisi (sprite) animasyon efekti baslat.
+
+        frames: list[pygame.Surface] (fx_sprites'tan gelir; burada import
+        edilmez). (x, y) MERKEZdir. loop=False iken bir kez oynayip kaybolur.
+        scale != 1.0 ise kareler olceklenir. Bos/None frames -> no-op (crash
+        yok). draw_world icinde (sarsintiya dahil) cizilir.
+        """
+        if not frames:
+            return
+        self.anims.append(_AnimEffect(frames, x, y, fps=fps, scale=scale, loop=loop))
+
     def set_ambient(self, kind):
         """Sahne ortam partikullerini ayarla.
 
@@ -334,6 +400,8 @@ class EffectSystem:
             d.update()
         for r in self.rings:
             r.update()
+        for an in self.anims:
+            an.update()
         # ortam partikulleri: birkac karede bir hafifce uret (dusuk yogunluk)
         if self.ambient_kind != "none":
             self._ambient_timer += 1
@@ -346,6 +414,8 @@ class EffectSystem:
         self.particles = [p for p in self.particles if p.life > 0]
         self.numbers = [d for d in self.numbers if d.life > 0]
         self.rings = [r for r in self.rings if r.life > 0]
+        # biten (loop=False, son kareyi gecmis) anim efektlerini ele
+        self.anims = [an for an in self.anims if an.life > 0]
         # ekran disina cikan veya omru biten ambient'leri ele
         self.ambient = [
             a for a in self.ambient
@@ -373,7 +443,7 @@ class EffectSystem:
         """Dunya katmaninda (sarsintiya dahil) cizilen efektler.
 
         Ortam partikulleri (arka atmosfer) -> kivilcim/toz -> impact halkalari
-        sirasiyla cizilir.
+        -> kare-dizisi anim efektleri (patlama/muzzle) sirasiyla cizilir.
         """
         for a in self.ambient:
             a.draw(surf, ox, oy)
@@ -381,6 +451,8 @@ class EffectSystem:
             p.draw(surf, ox, oy)
         for r in self.rings:
             r.draw(surf, ox, oy)
+        for an in self.anims:
+            an.draw(surf, ox, oy)
 
     def draw_overlay(self, surf):
         """HUD ustunde, sarsintisiz cizilen efektler: hasar sayilari + flash."""

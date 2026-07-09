@@ -9,7 +9,8 @@ from enum import Enum, auto
 
 import pygame
 
-from . import audio, combat, effects, hud, projectile, renderer, settings, stages
+from . import (audio, combat, effects, fx_sprites, hud, projectile, renderer,
+               settings, stages)
 from .characters import CHARACTERS, AttackData
 from .controller import AIController, HumanController, Inputs, DIFFICULTY_LABELS
 from .fighter import Fighter, State
@@ -107,6 +108,7 @@ class Match:
                 self.p2.update(i2, self.p1)
                 self._whoosh_check()
                 self._handle_specials()
+                self._resolve_throws()
                 hit_events = combat.resolve_hits(self.p1, self.p2)
                 combat.push_apart(self.p1, self.p2)
                 self._spawn_hit_effects(hit_events)
@@ -152,15 +154,16 @@ class Match:
                                    heavy=ev.heavy, ko=ev.ko)
             if ev.combo >= 2 and not ev.blocked:
                 self.effects.spawn_combo(ev.combo, ev.attacker is self.p1)
+            col = ev.attacker.data.color   # tema-renkli halka (D18)
             if ev.blocked:
                 audio.play("block")
                 self.hitstop = max(self.hitstop, effects.HITSTOP_BLOCK)
             elif ev.heavy or ev.ko:
-                self.effects.spawn_impact_ring(ev.x, ev.y, big=True)
+                self.effects.spawn_impact_ring(ev.x, ev.y, color=col, big=True)
                 audio.play("hit_heavy")
                 self.hitstop = max(self.hitstop, effects.HITSTOP_HEAVY)
             else:
-                self.effects.spawn_impact_ring(ev.x, ev.y)
+                self.effects.spawn_impact_ring(ev.x, ev.y, color=col)
                 audio.play("hit_light")
                 self.hitstop = max(self.hitstop, effects.HITSTOP_NORMAL)
 
@@ -172,23 +175,30 @@ class Match:
             self._prev_attacking[i] = atk
 
     def _handle_specials(self):
-        """Dovuscunun ozel ates sinyalini okuyup mermi olusturur."""
+        """Dovuscunun ozel ates sinyalini okuyup mermi olusturur (EX dahil)."""
         for f in (self.p1, self.p2):
             if f.spawn_special is None:
                 continue
             spec = f.spawn_special
             f.spawn_special = None
+            ex = getattr(f, "_special_ex", False)   # metre dolu = EX (guclu)
             px = f.x + f.facing * (f.data.width * 0.6)
             py = f.y - f.data.height * 0.55
-            proj = projectile.make_fireball(px, py, f.facing, spec.color,
-                                            spec.damage, f, speed=spec.speed,
-                                            hit_w=spec.hit_w, hit_h=spec.hit_h)
-            # combat'in isabet cozumu icin hafif bir AttackData ekle
-            proj.attack = AttackData("özel ateş", spec.damage, 0, 1, 0,
-                                     spec.hitstun, spec.knockback, spec.hit_w,
-                                     spec.hit_h, 0.55, guard="high")
+            scale = 4.6 if ex else 3.0
+            dmg = round(spec.damage * 1.7) if ex else spec.damage
+            speed = spec.speed * (1.12 if ex else 1.0)
+            hw = spec.hit_w + (20 if ex else 0)
+            hh = spec.hit_h + (16 if ex else 0)
+            kb = spec.knockback + (3.0 if ex else 0.0)
+            proj = projectile.make_fireball(px, py, f.facing, spec.color, dmg, f,
+                                            speed=speed, scale=scale, hit_w=hw, hit_h=hh)
+            proj.attack = AttackData("özel ateş", dmg, 0, 1, 0, spec.hitstun, kb,
+                                     hw, hh, 0.55, guard="high")
             self.projectiles.append(proj)
-            audio.play("whoosh", 0.85)
+            # namlu flasi (muzzle)
+            self.effects.spawn_anim(fx_sprites.explosion_frames(spec.color, scale=2.4),
+                                    px, py, fps=30)
+            audio.play("whoosh", 0.9)
 
     def _update_projectiles(self):
         if not self.projectiles:
@@ -196,8 +206,42 @@ class Match:
         for proj in self.projectiles:
             proj.update()
         events = combat.resolve_projectiles(self.projectiles, self.p1, self.p2)
+        for ev in events:   # isabet noktasinda patlama animasyonu
+            color = ev.attacker.data.special.color if ev.attacker.data.special else 0
+            self.effects.spawn_anim(fx_sprites.explosion_frames(color, scale=3.0),
+                                    ev.x, ev.y, fps=26)
         self._spawn_hit_effects(events)
         self.projectiles = [p for p in self.projectiles if p.alive]
+
+    def _resolve_throws(self):
+        """Yakin mesafede atma (bloklanamaz); match iki dovuscuyu birden gorur."""
+        for f, other in ((self.p1, self.p2), (self.p2, self.p1)):
+            if not f.wants_throw:
+                continue
+            f.wants_throw = False
+            gap = abs(other.x - f.x) - (f.data.width + other.data.width) / 2
+            if not (gap < 46 and other.on_ground and other.state not in (
+                    State.KO, State.HITSTUN, State.SPECIAL, State.WEAPON, State.THROW)):
+                continue
+            dmg = 12
+            other.health = max(0, other.health - dmg)
+            other.attack = None
+            other.blocking = False
+            other.knocked_down = True
+            other.hitstun_left = 30
+            other.set_state(State.HITSTUN)
+            other.vx = f.facing * 12.0
+            other.vy = -8.0
+            other.on_ground = False
+            f.meter = min(settings.SUPER_MAX, f.meter + settings.SUPER_GAIN_HIT)
+            other.meter = min(settings.SUPER_MAX, other.meter + settings.SUPER_GAIN_TAKEN)
+            self.effects.spawn_hit(other.x, other.y - other.data.height * 0.5,
+                                   dmg, heavy=True)
+            self.effects.add_shake(10)
+            audio.play("hit_heavy")
+            if other.health <= 0:
+                other.set_state(State.KO)
+                other.vy = -7.0
 
     def _decay_combos(self):
         """Bir dovuscu hitstun'dan cikinca rakibinin kombosunu sifirla."""
@@ -217,16 +261,17 @@ class Match:
                 self.effects.spawn_dust(f.x, settings.FLOOR_Y)
                 audio.play("land", 0.6)
 
-    def _start_ko_slowmo(self):
+    def _start_ko_slowmo(self, loser=None):
         self.slowmo = 48
-        audio.play("ko")
+        key = loser.data.key if loser is not None else None
+        audio.play(f"ko_{key}" if key else "ko")   # karaktere özel KO sesi
         self.effects.set_slowmo_vignette(True)
 
     def _check_round_end(self):
         ko1 = self.p1.state == State.KO
         ko2 = self.p2.state == State.KO
         if ko1 or ko2:
-            self._start_ko_slowmo()
+            self._start_ko_slowmo(self.p1 if ko1 else self.p2)
         if ko1 and ko2:
             self._end_round(None, "ÇİFT NAKAVT!")
         elif ko1:
@@ -266,6 +311,9 @@ class Match:
         order = sorted((self.p1, self.p2), key=lambda f: f.state == State.KO, reverse=True)
         for f in order:
             self.renderer.draw_fighter(surf, f, ox, oy)
+        for f in (self.p1, self.p2):           # silah hilali dovusculerin ustunde
+            if f.state == State.WEAPON:
+                self.renderer.draw_weapon_arc(surf, f, ox, oy)
         self.effects.draw_world(surf, ox, oy)  # kivilcim/toz (sarsintiya dahil)
         for proj in self.projectiles:          # ucan mermiler
             proj.draw(surf, ox, oy)

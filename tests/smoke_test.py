@@ -278,6 +278,53 @@ def test_special_flow_in_match():
     assert saw_proj, "ozel hareket macta mermi olusturmali"
 
 
+def test_ex_needs_full_meter():
+    a, b = _fresh()
+    a.meter = settings.SUPER_MAX
+    a.update(Inputs(special=True), b)
+    assert a.state == State.SPECIAL and a.meter == 0 and a._special_ex is True
+    c = Fighter(CHARACTERS[A], 600, 1)
+    c.meter = c.data.special.meter_cost   # yeterli ama dolu degil
+    c.update(Inputs(special=True), b)
+    assert c._special_ex is False, "yarim metre EX olmamali"
+
+
+def test_weapon_move_hits():
+    ada = CHARACTER_ORDER[1]              # ada: grounded hilal
+    a = Fighter(CHARACTERS[ada], 600, 1)
+    b = Fighter(CHARACTERS[ada], 664, -1)
+    a.meter = a.data.weapon.meter_cost
+    a.update(Inputs(weapon=True), b)
+    assert a.state == State.WEAPON and a.meter == 0
+    hp0 = b.health
+    for _ in range(40):
+        _step(a, b)
+        a.x, b.x = 600, 664
+    assert b.health < hp0, "ozel silah yakin rakibe hasar vermeli"
+
+
+def test_throw_is_unblockable():
+    m = Match(A, A, AIController("orta"), AIController("orta"), "Orta")
+    m.phase = Phase.FIGHT
+    m.p1.x, m.p2.x = 600, 650
+    m.p2.set_state(State.BLOCK)
+    m.p2.blocking = True                 # blok deniyor ama atma bloklanamaz
+    hp0 = m.p2.health
+    m.p1.wants_throw = True
+    m._resolve_throws()
+    assert m.p2.health < hp0 and m.p2.knocked_down, "atma bloklanamaz + yere serer"
+
+
+def test_throw_needs_range():
+    m = Match(A, A, AIController("orta"), AIController("orta"), "Orta")
+    m.phase = Phase.FIGHT
+    m.p1.x, m.p2.x = 400, 900             # uzak
+    hp0 = m.p2.health
+    m.p1.wants_throw = True
+    m._resolve_throws()
+    assert m.p2.health == hp0, "menzil disinda atma tutmamali"
+
+
 # ---------------------------------------------------------------- round akisi
 def test_ko_and_round_flow():
     m = Match(A, B, AIController("orta"), AIController("orta"), "Orta")

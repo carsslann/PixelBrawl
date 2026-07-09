@@ -22,6 +22,8 @@ class Inputs:
     down: bool = False   # comelme (insan: S)
     block: bool = False  # dogrudan blok (bot kullanir; insan GERI tutarak bloklar)
     special: bool = False  # ozel ates (insan: ↓ → + yumruk; bot: ara sira)
+    weapon: bool = False   # ozel silah (insan: ↓ ← + tekme)
+    throw: bool = False    # atma/tutma (insan: yumruk + tekme ayni anda)
 
 
 class Controller:
@@ -53,6 +55,7 @@ class HumanController(Controller):
         self.frame = 0
         self.t_down = -999   # son ↓ karesi
         self.t_fwd = -999    # son ILERI karesi
+        self.t_back = -999   # son GERI karesi
 
     def get_inputs(self, me, opponent, pressed, events) -> Inputs:
         inp = Inputs()
@@ -60,32 +63,50 @@ class HumanController(Controller):
         inp.move = ((1 if pressed[self.keys["right"]] else 0)
                     - (1 if pressed[self.keys["left"]] else 0))
         inp.down = bool(pressed[self.keys["down"]])
-        # yon tamponu: ↓ ve ILERI (rakibe dogru) basimlarini zaman damgala
+        # yon tamponu: ↓, ILERI ve GERI basimlarini zaman damgala
         fwd = 1 if opponent.x >= me.x else -1
         if inp.down:
             self.t_down = self.frame
         if inp.move == fwd:
             self.t_fwd = self.frame
-        # blok: rakibe göre GERI yönü tutmak (fighter cozer); ayri tuS yok
+        elif inp.move == -fwd:
+            self.t_back = self.frame
+        # bu karedeki yumruk/tekme basimlari
+        punch_down = kick_down = False
         for e in events:
             if e.type == pygame.KEYDOWN:
                 if e.key == self.keys["jump"]:
                     inp.jump = True
-                elif e.key == self.keys["kick"]:
-                    inp.kick = True
                 elif e.key == self.keys["punch"]:
-                    if self._qcf():
-                        inp.special = True
-                        self.t_down = self.t_fwd = -999  # tekrar tetiklenmesin
-                    else:
-                        inp.punch = True
+                    punch_down = True
+                elif e.key == self.keys["kick"]:
+                    kick_down = True
+        if punch_down and kick_down:        # ayni kare J+K = atma
+            inp.throw = True
+        else:
+            if punch_down:
+                if self._qcf():             # ↓→+J = ozel ates
+                    inp.special = True
+                    self.t_down = self.t_fwd = -999
+                else:
+                    inp.punch = True
+            if kick_down:
+                if self._qcb():             # ↓←+K = ozel silah
+                    inp.weapon = True
+                    self.t_down = self.t_back = -999
+                else:
+                    inp.kick = True
         return inp
 
     def _qcf(self) -> bool:
-        # ↓ ONCE, sonra ILERI, sonra yumruk — hepsi pencere icinde
         return (self.t_down < self.t_fwd
                 and self.frame - self.t_down <= self.QCF_DOWN_WINDOW
                 and self.frame - self.t_fwd <= self.QCF_FWD_WINDOW)
+
+    def _qcb(self) -> bool:
+        return (self.t_down < self.t_back
+                and self.frame - self.t_down <= self.QCF_DOWN_WINDOW
+                and self.frame - self.t_back <= self.QCF_FWD_WINDOW)
 
 
 # ----------------------------------------------------------------------
@@ -140,6 +161,17 @@ class AIController(Controller):
                 and me.state in (State.IDLE, State.WALK)
                 and 120 < gap < 520 and random.random() < 0.03):
             inp.special = True
+            return inp
+        # metre doluysa yakinken ara sira ozel silah
+        if (me.data.weapon is not None and me.meter >= me.data.weapon.meter_cost
+                and me.state in (State.IDLE, State.WALK)
+                and gap < 95 and random.random() < 0.025):
+            inp.weapon = True
+            return inp
+        # cok yakinsa ara sira atma (blogu kirar)
+        if (me.state in (State.IDLE, State.WALK)
+                and gap < 42 and random.random() < 0.02):
+            inp.throw = True
             return inp
 
         # rakip saldiriya yeni mi gecti? -> blok karari

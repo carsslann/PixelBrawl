@@ -72,6 +72,23 @@ class Renderer:
                 return
         self._draw_procedural(surf, f, ox, oy)
 
+    def draw_weapon_arc(self, surf, f, ox=0, oy=0):
+        a = f.attack
+        if a is None or not (a.startup <= f.state_frame < a.startup + a.active + 2):
+            return
+        cx = int(f.x + ox + f.facing * (f.data.width * 0.45 + a.hit_w * 0.35))
+        cy = int(f.y + oy - f.data.height * a.height_frac)
+        r = int(max(30, a.hit_w * 0.55))
+        pad = r + 6
+        layer = pygame.Surface((pad * 2, pad * 2), pygame.SRCALPHA)
+        rect = pygame.Rect(pad - r, pad - r, r * 2, r * 2)
+        a0, a1 = (-1.0, 1.0) if f.facing >= 0 else (math.pi - 1.0, math.pi + 1.0)
+        pygame.draw.arc(layer, f.data.color, rect, a0, a1, 10)
+        inner = rect.inflate(-int(r * 0.7), -int(r * 0.7))
+        pygame.draw.arc(layer, (255, 255, 255), inner, a0, a1, 5)
+        layer.set_alpha(205)
+        surf.blit(layer, layer.get_rect(center=(cx, cy)))
+
     def _draw_guard(self, surf, f, ox=0, oy=0):
         gx = f.x + ox + f.facing * (f.data.width * 0.5 + 8)
         low = f.state == State.CROUCH

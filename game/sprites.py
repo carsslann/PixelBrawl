@@ -31,10 +31,12 @@ STATE_POSES = {
     State.JUMP:    (["jump"], 1, False),
     State.HITSTUN: (["hit"], 1, False),
     State.KO:      (["hurt", "fallDown", "down"], 9, False),
-    # PUNCH/KICK ozel: kareler saldirinin startup->recovery suresine yayilir
+    # PUNCH/KICK/WEAPON ozel: kareler saldirinin startup->recovery suresine yayilir
     State.PUNCH:   (["attack0", "attack1", "attack2"], 0, False),
     State.KICK:    (["attack1", "kick", "kick"], 0, False),
-    State.SPECIAL: (["attack1", "attack2"], 6, False),  # ates savurma pozu
+    State.WEAPON:  (["attack0", "attack2"], 0, False),   # silah savurma
+    State.SPECIAL: (["attack1", "attack2"], 6, False),   # ates savurma pozu
+    State.THROW:   (["shove"], 1, False),                # atma/tutma
 }
 # yere serilince (supurme) gosterilecek pozlar
 KNOCKDOWN_POSES = ["hurt", "fallDown"]
@@ -65,7 +67,8 @@ class Animator:
         if n == 0:
             return None
 
-        if fighter.state in (State.PUNCH, State.KICK) and fighter.attack is not None:
+        if (fighter.state in (State.PUNCH, State.KICK, State.WEAPON)
+                and fighter.attack is not None):
             # kareleri saldirinin toplam suresine yay (startup..recovery)
             progress = min(0.999, fighter.state_frame / max(1, fighter.attack.total))
             idx = int(progress * n)

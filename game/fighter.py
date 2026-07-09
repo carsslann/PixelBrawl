@@ -28,14 +28,16 @@ class State(Enum):
     JUMP = auto()
     PUNCH = auto()
     KICK = auto()
+    WEAPON = auto()    # ozel silah (yakin vurus) hareketi
     SPECIAL = auto()   # ozel ates (mermi) hareketi
+    THROW = auto()     # atma/tutma
     BLOCK = auto()
     HITSTUN = auto()
     KO = auto()
 
 
 NEUTRAL_STATES = (State.IDLE, State.WALK, State.CROUCH, State.BLOCK)
-ATTACK_STATES = (State.PUNCH, State.KICK)
+ATTACK_STATES = (State.PUNCH, State.KICK, State.WEAPON)  # active_hitbox olanlar
 
 
 def _sign(x: float) -> int:
@@ -67,7 +69,9 @@ class Fighter:
         self.combo_count = 0    # bu dovuscunun SALDIRAN olarak surdurdugu kombo
         self.meter = 0          # super metre (ozel hareket icin)
         self._special = None    # su an yapilan SpecialSpec (SPECIAL durumu)
+        self._special_ex = False   # metre doluyken guclendirilmis (EX) ates
         self.spawn_special = None  # mermi cikis sinyali; match okuyup temizler
+        self.wants_throw = False   # bu karede atma denemesi (match cozer)
         # yalnizca gorsel katmanin kullandigi sayaclar/olaylar
         self.hit_flash = 0
         self.block_flash = 0
@@ -139,6 +143,7 @@ class Fighter:
         self.attack_airborne = False
         self._special = None       # ozel hareket kesintiye ugradi
         self.spawn_special = None
+        self.wants_throw = False
         self.blocking = False
         if self.health <= 0:
             self.set_state(State.KO)
@@ -165,12 +170,33 @@ class Fighter:
 
     def _start_special(self):
         spec = self.data.special
-        self.meter = max(0, self.meter - spec.meter_cost)
+        if self.meter >= settings.SUPER_MAX:     # metre dolu -> EX (guclu) ates
+            self._special_ex = True
+            self.meter = 0
+        else:
+            self._special_ex = False
+            self.meter = max(0, self.meter - spec.meter_cost)
         self._special = spec
         self.spawn_special = None
         self.attack = None
         self.vx = 0.0
         self.set_state(State.SPECIAL)
+
+    def _start_weapon(self):
+        w = self.data.weapon
+        self.meter = max(0, self.meter - w.meter_cost)
+        self.attack = w.attack
+        self.attack_has_hit = False
+        self.blocking = False
+        if w.anti_air:                # yukselen vurus (anti-air)
+            self.attack_airborne = True
+            self.on_ground = False
+            self.vy = -12.0
+            self.vx = self.facing * w.lunge * 0.4
+        else:
+            self.attack_airborne = False
+            self.vx = self.facing * w.lunge   # ileri atilma
+        self.set_state(State.WEAPON)
 
     def _update_special(self):
         self.vx = 0.0
@@ -218,6 +244,13 @@ class Fighter:
             self._update_special()
             return
 
+        if self.state == State.THROW:   # atma denemesi/animasyonu (match cozer)
+            self.vx = 0.0
+            if self.state_frame >= 18:
+                self.set_state(State.IDLE)
+            self._physics()
+            return
+
         if self.state == State.JUMP:
             # havada tek bir saldiri hakki
             if not self.attack_airborne and (inputs.punch or inputs.kick):
@@ -236,9 +269,16 @@ class Fighter:
         holding_back = inputs.move != 0 and _sign(inputs.move) == -self.facing
         block_req = bool(inputs.block) or holding_back
 
-        if (inputs.special and self.data.special is not None
+        if inputs.throw and self.on_ground:
+            self.wants_throw = True         # match yakinsa atmayi cozer
+            self.vx = 0.0
+            self.set_state(State.THROW)
+        elif (inputs.special and self.data.special is not None
                 and self.meter >= self.data.special.meter_cost):
             self._start_special()
+        elif (inputs.weapon and self.data.weapon is not None
+                and self.meter >= self.data.weapon.meter_cost):
+            self._start_weapon()
         elif inputs.punch:
             atk = self.data.crouch_punch if inputs.down else self.data.punch
             self._start_attack(State.PUNCH, atk, airborne=False)
@@ -282,7 +322,12 @@ class Fighter:
                 self.set_state(State.IDLE)
             return
 
-        self.vx = 0.0
+        if self.state == State.WEAPON:
+            self.vx *= 0.85         # silah atilma momentumu sonumlensin
+            if abs(self.vx) < 0.2:
+                self.vx = 0.0
+        else:
+            self.vx = 0.0
         if self.attack is None or self.state_frame >= self.attack.total:
             self.attack = None
             self.set_state(State.IDLE)

@@ -56,6 +56,13 @@ SOUNDS = (
     "whoosh",
     "menu_move",
     "menu_select",
+    # Karaktere ozel KO haykirislari (temel "ko" gong'unun perde/tini varyantlari)
+    "ko_efe",
+    "ko_ada",
+    "ko_zeynep",
+    "ko_mira",
+    "ko_robo",
+    "ko_goron",
 )
 
 # ---------------------------------------------------------------------------
@@ -269,6 +276,84 @@ def _design_ko():
     return fade(normalize(mix(base, h2, h3, h5, strike), peak=0.92), out_ms=60.0)
 
 
+# --- Karaktere ozel KO haykirislari -----------------------------------------
+# Hepsi _design_ko'daki gong iskeletini temel alir; her karakter icin temel
+# frekans (f0), sure (dur) ve tini (harmonik agirlik / dalga tipi) degistirilir
+# ki sesler KULAKLA ayirt edilebilsin. Isimler: ko_<karakter>.
+
+def _ko_gong(f0, dur, decay=3.4, h_amps=(1.0, 0.5, 0.28, 0.14),
+             top_wave="triangle", strike_amp=0.5, peak=0.92):
+    """Parametrik gong: temel + harmonikler + vurus gurultusu.
+
+    f0        : temel frekans (Hz)
+    dur       : sure (s)
+    h_amps    : (h1,h2,h3,h5) harmonik genlikleri — 5. harmonik top_wave ile
+    top_wave  : en ust harmonigin dalga tipi (tini rengi)
+    strike_amp: baslangic vurus gurultusu genligi
+    """
+    a1, a2, a3, a5 = (h_amps + (0.0, 0.0, 0.0, 0.0))[:4]
+    base = tone(f0, dur, decay=decay, wave_type="sine", start_amp=a1)
+    h2 = tone(f0 * 2.0, dur, decay=decay + 0.4, wave_type="sine", start_amp=a2)
+    h3 = tone(f0 * 3.0, dur, decay=decay + 1.0, wave_type="sine", start_amp=a3)
+    h5 = tone(f0 * 5.0, dur, decay=decay + 1.8, wave_type=top_wave,
+              start_amp=a5)
+    strike = noise(0.05, decay=45.0, start_amp=strike_amp)
+    return fade(normalize(mix(base, h2, h3, h5, strike), peak=peak),
+                out_ms=60.0)
+
+
+def _design_ko_efe():
+    # Dengeli: orta perde gong + vurus (temel ko'ya yakin, hafif parlak)
+    return _ko_gong(80.0, 0.85, decay=3.3,
+                    h_amps=(1.0, 0.52, 0.30, 0.15), top_wave="triangle")
+
+
+def _design_ko_ada():
+    # Dengeli (efe'nin ikizi ama biraz alcak ve daha yuvarlak tini)
+    return _ko_gong(72.0, 0.88, decay=3.1,
+                    h_amps=(1.0, 0.46, 0.24, 0.10), top_wave="sine")
+
+
+def _design_ko_zeynep():
+    # Hizli: daha yuksek perde, kisa, keskin sonum
+    return _ko_gong(150.0, 0.5, decay=5.2,
+                    h_amps=(1.0, 0.5, 0.30, 0.18), top_wave="triangle",
+                    strike_amp=0.6)
+
+
+def _design_ko_mira():
+    # Hizli (zeynep'in ikizi ama daha da tiz ve kisa)
+    return _ko_gong(185.0, 0.42, decay=6.0,
+                    h_amps=(1.0, 0.55, 0.34, 0.20), top_wave="triangle",
+                    strike_amp=0.6)
+
+
+def _design_ko_robo():
+    # Robot: metalik/bitcrush hissi — kare dalga gong + distortion
+    f0 = 120.0
+    dur = 0.6
+    base = tone(f0, dur, decay=4.0, wave_type="square", start_amp=1.0)
+    ring = tone(f0 * 2.51, dur, decay=5.0, wave_type="square", start_amp=0.5)
+    hi = tone(f0 * 4.03, dur, decay=6.5, wave_type="square", start_amp=0.28)
+    clank = noise(0.05, decay=40.0, start_amp=0.55)
+    raw = mix(base, ring, hi, clank)
+    crushed = distort(raw, drive=3.0)  # sert kirpma -> bitcrush/metalik his
+    return fade(normalize(crushed, peak=0.9), out_ms=50.0)
+
+
+def _design_ko_goron():
+    # Agir: cok alcak, uzun, gur — yavas sonum + hafif distortion (govde)
+    f0 = 46.0
+    dur = 1.35
+    base = tone(f0, dur, decay=2.2, wave_type="sine", start_amp=1.0)
+    h2 = tone(f0 * 2.0, dur, decay=2.6, wave_type="sine", start_amp=0.55)
+    h3 = tone(f0 * 3.0, dur, decay=3.2, wave_type="triangle", start_amp=0.30)
+    rumble = noise(0.10, decay=22.0, start_amp=0.6)
+    raw = mix(base, h2, h3, rumble)
+    body = distort(raw, drive=1.5)  # gur/dolu govde
+    return fade(normalize(body, peak=0.96), out_ms=90.0)
+
+
 def _design_jump():
     # Hizli yukari chirp (~0.15s)
     body = sweep(320, 760, 0.15, decay=10.0)
@@ -320,6 +405,13 @@ _DESIGNS = {
     "whoosh": _design_whoosh,
     "menu_move": _design_menu_move,
     "menu_select": _design_menu_select,
+    # Karaktere ozel KO haykirislari
+    "ko_efe": _design_ko_efe,
+    "ko_ada": _design_ko_ada,
+    "ko_zeynep": _design_ko_zeynep,
+    "ko_mira": _design_ko_mira,
+    "ko_robo": _design_ko_robo,
+    "ko_goron": _design_ko_goron,
 }
 
 
@@ -512,7 +604,11 @@ def play(name, vol=1.0):
         return
     snd = _sounds.get(name)
     if snd is None:
-        return
+        # Kolaylik: bilinmeyen "ko_<karakter>" -> temel "ko" gong'una dus.
+        if isinstance(name, str) and name.startswith("ko_"):
+            snd = _sounds.get("ko")
+        if snd is None:
+            return
     try:
         v = 0.0 if vol < 0.0 else (1.0 if vol > 1.0 else float(vol))
         snd.set_volume(v)

@@ -26,6 +26,9 @@ py main.py
 | J | Yumruk |
 | K | Tekme |
 | **geri tut** | Blok (rakibin tersine bas) |
+| ↓ → + J | Özel ateş (mermi) · dolu metre = EX |
+| ↓ ← + K | Özel silah (hilal / anti-air) |
+| J + K | Atma (bloklanamaz, yakın) |
 | ESC | Duraklat / devam (duraklatmada Q: ana menü) |
 
 Menüde ok tuşları / WASD ile karakterini, rakibini ve bot zorluğunu
@@ -50,9 +53,16 @@ savunmasızsın.
   yumruk — quarter-circle-forward). Süper metre yeterliyse karakterin renkli
   ateş topunu fırlatır; blokla kesilebilir (chip). Her karakterin rengi/hızı/
   hasarı farklı (ROBO yavaş-güçlü, ZEYNEP hızlı-zayıf).
+- **Özel silah:** komut **↓ ← + K**. Yakın mesafe hilal/vuruş; efe/robo/goron
+  yükselen anti-air (havadaki rakibi düşürür), ada/mira ileri hilal, zeynep
+  hızlı atılma. Karaktere göre renkli yay çizilir.
+- **Atma (throw):** **J + K aynı anda**, yakın mesafede. **Bloklanamaz** — bloğu
+  kıran tek seçenek; rakibi yere serer.
+- **EX ateş:** süper metre **doluyken** özel ateş yaparsan tüm barı harcayıp
+  daha büyük/hızlı/güçlü ateş fırlatır.
 
-**Süper metre:** can barının altındaki bar; vuruş verince/yiyince dolar,
-özel ateş harcar (dolunca sarı). Bot da metresi dolunca ara sıra ateş açar.
+**Süper metre:** can barının altındaki bar; vuruş verince/yiyince dolar (dolunca
+sarı). Özel ateş/silah harcar, dolu bar = EX. Bot da metresi dolunca kullanır.
 
 **Blok:** rakibin tersine bastığın sürece bloklarsın; hasarın ~%85'ini keser
 (kalan "chip"). Doğru yükseklikte bloklamak şart: alçağı çömelerek, overhead'i

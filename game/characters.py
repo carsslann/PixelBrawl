@@ -67,6 +67,22 @@ def _special(color, damage, speed, cast, recovery, cost, knockback, hitstun):
 
 
 @dataclass(frozen=True)
+class WeaponSpec:
+    """Karaktere ozel yakin-mesafe SILAH hareketi (mermi degil, vurus kutulu)."""
+    attack: "AttackData"
+    meter_cost: int
+    anti_air: bool = False   # yukari vurur + kullaniciyi hafif havalandirir
+    lunge: float = 0.0       # ileri atilma hizi
+
+
+def _weapon(name, dmg, su, act, rec, hs, kb, w, h, hf, cost,
+            anti_air=False, lunge=0.0, guard="high"):
+    return WeaponSpec(
+        AttackData(name, dmg, su, act, rec, hs, kb, w, h, hf, guard=guard, chain=3),
+        cost, anti_air, lunge)
+
+
+@dataclass(frozen=True)
 class CharacterData:
     key: str
     name: str
@@ -81,6 +97,7 @@ class CharacterData:
     kick: AttackData
     sprite: SpriteRef | None = None
     special: SpecialSpec | None = None
+    weapon: WeaponSpec | None = None
 
     # --- turetilmis saldirilar (comelme / hava) --------------------------
     # Temel yumruk/tekmeden hesaplanir; ayri veri tutmaya gerek yok.
@@ -186,7 +203,17 @@ _SPECIALS = {
     "robo":   _special(6, 19, 6.5,  18, 24, 55, 9.5, 22),
     "goron":  _special(3, 16, 7.5,  16, 22, 52, 8.5, 20),
 }
-CHARACTERS = {k: dataclasses.replace(v, special=_SPECIALS[k])
+# Karaktere ozel SILAH (↓ ← + K). efe/robo/goron = yukselen anti-air,
+# ada/mira = ileri hilal yayi, zeynep = hizli atilma kesigi.
+_WEAPONS = {
+    "efe":    _weapon("alev yumruk", 16, 6, 6, 20, 20, 8.0, 72, 96, 0.70, 40, anti_air=True),
+    "ada":    _weapon("hilal", 15, 8, 6, 18, 20, 8.0, 122, 46, 0.50, 40, lunge=3.0),
+    "zeynep": _weapon("hızlı kesik", 12, 5, 5, 14, 16, 6.0, 106, 40, 0.50, 35, lunge=7.0),
+    "mira":   _weapon("çift hilal", 13, 6, 6, 16, 17, 7.0, 112, 44, 0.50, 38, lunge=4.5),
+    "robo":   _weapon("şarj vuruş", 20, 10, 6, 24, 24, 11.0, 80, 104, 0.66, 50, anti_air=True),
+    "goron":  _weapon("alev sütunu", 18, 9, 7, 22, 22, 10.0, 76, 116, 0.60, 48, anti_air=True),
+}
+CHARACTERS = {k: dataclasses.replace(v, special=_SPECIALS[k], weapon=_WEAPONS[k])
               for k, v in CHARACTERS.items()}
 
 CHARACTER_ORDER = ["efe", "ada", "zeynep", "mira", "robo", "goron"]
