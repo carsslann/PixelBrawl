@@ -10,7 +10,7 @@ from collections import deque
 
 import pygame
 
-from . import settings, sprites, stages, weapons
+from . import rig, settings, sprites, stages, weapons
 from .fighter import State
 
 
@@ -43,6 +43,12 @@ class Renderer:
     # ------------------------------------------------------------------
     def draw_fighter(self, surf: pygame.Surface, f, ox=0, oy=0):
         self._draw_shadow(surf, f, ox, oy)
+        # silah kusanmis dovuscu: parca-rig (silah elde kavranmis + savrulur)
+        if (getattr(f, "weapon_key", None) and rig.available(f.data)
+                and rig.draw(surf, f, ox, oy)):
+            if f.blocking:
+                self._draw_guard(surf, f, ox, oy)
+            return
         animator = self._animator_for(f)
         if animator is not None:
             frame = animator.frame_for(f)
@@ -65,7 +71,6 @@ class Renderer:
                 else:
                     trail.clear()
                 surf.blit(frame, rect)
-                self._draw_blade(surf, f, ox, oy)   # elde/savrulan silah
                 if f.hit_flash:
                     self._flash_sprite(surf, frame, rect)
                 if f.blocking:
