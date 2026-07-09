@@ -15,9 +15,11 @@ class HitEvent:
 	var attacker: Fighter
 	var combo: int
 	var knockdown: bool
+	var counter: bool
+	var parry: bool
 	func _init(p_x: float, p_y: float, p_damage: int, p_blocked: bool,
 			p_heavy: bool, p_ko: bool, p_attacker: Fighter, p_combo := 1,
-			p_knockdown := false) -> void:
+			p_knockdown := false, p_counter := false, p_parry := false) -> void:
 		x = p_x
 		y = p_y
 		damage = p_damage
@@ -27,6 +29,8 @@ class HitEvent:
 		attacker = p_attacker
 		combo = p_combo
 		knockdown = p_knockdown
+		counter = p_counter
+		parry = p_parry
 
 # ---- pygame.Rect yardimcilari (kenar-degme carpisma degil) ----
 static func _overlap(a: Rect2i, b: Rect2i) -> bool:
@@ -71,24 +75,32 @@ static func _apply(attacker: Fighter, defender: Fighter, attack: AttackData) -> 
 	var pt := _hit_point(attacker, defender)
 	var stance = defender.block_stance()
 	var blocked: bool = stance != null and _guard_ok(stance, attack.guard)
+	# counter-hit: rakip saldiri baslatmisken (henuz isabet etmemisken) vurmak
+	var counter: bool = (not blocked) and (defender.state in Fighter.ATTACK_STATES) \
+		and (not defender.attack_has_hit)
+	var parry: bool = blocked and defender.block_frames <= Settings.PARRY_WINDOW
 
 	var dmg: int
+	var hs_mult := 1.0
 	if blocked:
 		attacker.combo_count = 0
-		dmg = maxi(1, roundi(attack.damage * Settings.CHIP_DAMAGE_RATIO))
+		dmg = 0 if parry else maxi(1, roundi(attack.damage * Settings.CHIP_DAMAGE_RATIO))
 	else:
 		if defender.state == Fighter.State.HITSTUN:   # suregelen kombo
 			attacker.combo_count += 1
 		else:
 			attacker.combo_count = 1
 		var scale: float = COMBO_SCALE[mini(COMBO_SCALE.size() - 1, attacker.combo_count - 1)]
-		dmg = maxi(1, roundi(attack.damage * scale))
+		var cmult := Settings.COUNTER_DMG if counter else 1.0
+		dmg = maxi(1, roundi(attack.damage * scale * cmult))
+		if counter:
+			hs_mult = Settings.COUNTER_HITSTUN
 
-	defender.take_hit(attack, attacker.facing, blocked, dmg)
-	var heavy: bool = attack.knockback >= 9.0 or attack.knockdown
+	defender.take_hit(attack, attacker.facing, blocked, dmg, hs_mult, parry)
+	var heavy: bool = attack.knockback >= 9.0 or attack.knockdown or counter
 	return HitEvent.new(pt.x, pt.y, dmg, blocked, heavy,
 		defender.state == Fighter.State.KO, attacker, attacker.combo_count,
-		attack.knockdown and not blocked)
+		attack.knockdown and not blocked, counter, parry)
 
 static func _hit_point(attacker: Fighter, defender: Fighter) -> Vector2i:
 	var hb = attacker.active_hitbox()
@@ -110,7 +122,7 @@ static func _hit_point(attacker: Fighter, defender: Fighter) -> Vector2i:
 	return Vector2i(box.position.x + box.size.x / 2, box.position.y)
 
 static func _lands(attacker: Fighter, defender: Fighter) -> bool:
-	if attacker.attack_has_hit or defender.state == Fighter.State.KO:
+	if attacker.attack_has_hit or defender.state == Fighter.State.KO or defender.invuln > 0:
 		return false
 	var hb = attacker.active_hitbox()
 	if hb == null:

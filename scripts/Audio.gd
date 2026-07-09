@@ -9,6 +9,8 @@ var _sounds := {}
 var _sfx: Array = []
 var _sfx_i := 0
 var _music: AudioStreamPlayer
+var _muted := false
+var _base_vol := 0.28
 
 func _ready() -> void:
 	for n in NAMES:
@@ -28,6 +30,8 @@ func _ready() -> void:
 	_music.finished.connect(func(): if _music.stream != null: _music.play())
 
 func play(sound: String, vol := 1.0) -> void:
+	if _muted:
+		return
 	var s = _sounds.get(sound)
 	if s == null:
 		return
@@ -43,6 +47,16 @@ func play_music(vol := 0.3) -> void:
 	_music.volume_db = linear_to_db(vol)
 	if not _music.playing:
 		_music.play()
+
+func set_music_vol(v: float) -> void:
+	_base_vol = v
+	if _music != null and _music.playing and not _muted:
+		_music.volume_db = linear_to_db(clampf(v, 0.02, 1.0))
+
+func toggle_mute() -> void:
+	_muted = not _muted
+	if _music != null:
+		_music.volume_db = -80.0 if _muted else linear_to_db(clampf(_base_vol, 0.02, 1.0))
 
 func stop_music() -> void:
 	_music.stop()

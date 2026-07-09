@@ -20,6 +20,7 @@ class HitEvent:
     attacker: Fighter
     combo: int = 1        # saldiranin bu andaki kombo sayisi
     knockdown: bool = False
+    melee: bool = True    # yakin vurus (silah efekti icin); mermi ise False
 
 
 def _guard_ok(stance: str, guard: str) -> bool:
@@ -109,7 +110,7 @@ def _apply_projectile(proj, defender) -> HitEvent:
     defender.meter = min(settings.SUPER_MAX, defender.meter + settings.SUPER_GAIN_TAKEN)
     return HitEvent(cx, cy, dmg, blocked, heavy=True,
                     ko=(defender.state == State.KO), attacker=owner,
-                    combo=1, knockdown=False)
+                    combo=1, knockdown=False, melee=False)
 
 
 def _hit_point(attacker: Fighter, defender: Fighter):

@@ -160,6 +160,22 @@ func spawn_hit(x: float, y: float, damage: int, blocked := false, heavy := false
 func spawn_combo(count: int, left_side: bool) -> void:
 	combo = [count, 46, left_side]
 
+func spawn_counter(x: float, y: float) -> void:
+	numbers.append(DamageNumber.new(x, y - 62, "COUNTER!", Color8(255, 90, 90), 32))
+
+func spawn_parry(x: float, y: float) -> void:
+	numbers.append(DamageNumber.new(x, y - 60, "PARRY!", Color8(150, 220, 255), 32))
+	_spark(x, y, Color8(180, 230, 255), 10, 6.0)
+
+func spawn_guardcrush(x: float, y: float) -> void:
+	numbers.append(DamageNumber.new(x, y - 66, "GUARD CRUSH!", Color8(255, 200, 90), 30))
+
+func spawn_throw(x: float, y: float) -> void:
+	numbers.append(DamageNumber.new(x, y - 60, "THROW!", Color8(255, 160, 200), 30))
+
+func spawn_dizzy(x: float, y: float) -> void:
+	_spark(x, y, Color8(255, 220, 120), 14, 5.5)
+
 func spawn_dust(x: float, y: float, direction := 0) -> void:
 	for i in range(7):
 		var ang := randf_range(PI * 0.9, PI * 2.1)

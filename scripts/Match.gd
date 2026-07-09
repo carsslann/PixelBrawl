@@ -9,6 +9,11 @@ enum Phase { INTRO, FIGHT, ROUND_OVER, MATCH_OVER }
 
 var cfg := {"p1": "efe", "p2": "goron", "difficulty": "kolay"}
 
+var mode := "versus"
+var training := false
+var _recorded := false
+var match_frames := 0
+var _last_i1: Inputs
 var p1: Fighter
 var p2: Fighter
 var c1
@@ -32,17 +37,24 @@ var stage_name := ""
 var _diff_label := ""
 var _prev_hitstun := [false, false]
 var _prev_attacking := [false, false]
+var _prev_dizzy := [false, false]
 var _anim := {}
 var _shot_mode := false
+var _shot_train := false
 var _shot_f := 0
 
 func _ready() -> void:
-	_shot_mode = OS.get_environment("PIXELBRAWL_SHOT") == "1"
+	var _s := OS.get_environment("PIXELBRAWL_SHOT")
+	_shot_train = _s == "train"
+	_shot_mode = _s == "1" or _shot_train
+	mode = cfg.get("mode", "versus")
+	training = mode == "training"
 	effects = EffectSystem.new()
 	c1 = HumanController.new()
-	c2 = AIController.new(cfg["difficulty"])
-	_diff_label = AIController.DIFFICULTY_LABELS.get(cfg["difficulty"], "")
-	stage_name = Stages.NAMES[randi() % Stages.NAMES.size()]
+	c2 = AIController.new("zor" if training else cfg["difficulty"])
+	_diff_label = "Antrenman" if training else AIController.DIFFICULTY_LABELS.get(cfg["difficulty"], "")
+	var st: String = cfg.get("stage", "rastgele")
+	stage_name = st if st in Stages.NAMES else Stages.NAMES[randi() % Stages.NAMES.size()]
 	stage_scene = Stages.build(stage_name, Vector2i(Settings.WIDTH, Settings.HEIGHT))
 	_reset_match()
 	Audio.play_music(0.28)
@@ -53,6 +65,8 @@ func _ready() -> void:
 func _reset_match() -> void:
 	wins = [0, 0]
 	round_num = 1
+	_recorded = false
+	match_frames = 0
 	_start_round()
 
 func _start_round() -> void:
@@ -69,6 +83,7 @@ func _start_round() -> void:
 	phase_frame = 0
 	_prev_hitstun = [false, false]
 	_prev_attacking = [false, false]
+	_prev_dizzy = [false, false]
 
 func _ambient_for(s: String) -> String:
 	if s == "col":
@@ -76,7 +91,7 @@ func _ambient_for(s: String) -> String:
 	if s == "tepeler_gunbatimi":
 		return "embers"
 	if s == "gece_dorukleri" or s == "sato_alacakaranlik":
-		return "none"
+		return "snow"     # gece sahnelerinde kar (hava durumu)
 	return "leaves"
 
 func _animator(f: Fighter) -> SpriteAnimator:
@@ -117,22 +132,42 @@ func _physics_process(_dt: float) -> void:
 		Phase.MATCH_OVER:
 			p1.update(Inputs.new(), p2)
 			p2.update(Inputs.new(), p1)
+			_match_over_tick()
 	_hud_lag_update()
 	effects.update()
 	_update_cam()
+	# dinamik muzik: can azaldikca yogunlasir
+	var lowf := minf(float(p1.health) / p1.data.max_health, float(p2.health) / p2.data.max_health)
+	Audio.set_music_vol(0.22 + 0.16 * (1.0 - lowf))
 	queue_redraw()
 	_shot_tick()
+
+func _match_over_tick() -> void:
+	if not _recorded:
+		_recorded = true
+		if not training:
+			Config.record_result(wins[0] > wins[1], match_frames if wins[0] > wins[1] else 0)
+	if mode == "arcade" and phase_frame >= 150:
+		finished.emit("arcade_win" if wins[0] > wins[1] else "menu")
 
 func _fight_step() -> void:
 	if hitstop > 0:
 		hitstop -= 1
 		return
+	match_frames += 1
 	var i1: Inputs = c1.get_inputs(p1, p2)
-	var i2: Inputs = c2.get_inputs(p2, p1)
+	_last_i1 = i1
+	var i2: Inputs
+	if training:
+		# dummy normalde bekler; T basili tutulunca sana saldirir
+		i2 = c2.get_inputs(p2, p1) if Input.is_key_pressed(KEY_T) else Inputs.new()
+	else:
+		i2 = c2.get_inputs(p2, p1)
 	p1.update(i1, p2)
 	p2.update(i2, p1)
 	_check_special(p1)
 	_check_special(p2)
+	_resolve_throws(i1, i2)
 	_whoosh_check()
 	var evs := Combat.resolve_hits(p1, p2)
 	Combat.push_apart(p1, p2)
@@ -140,6 +175,14 @@ func _fight_step() -> void:
 	_spawn_move_fx()
 	_update_projectiles()
 	_decay_combos()
+	_check_dizzy_entry()
+	if training:
+		# sonsuz can: dummy'nin (ve oyuncunun) cani her kare tam dolar
+		p1.health = p1.data.max_health
+		p2.health = p2.data.max_health
+		p1.recoverable = 0
+		p2.recoverable = 0
+		return
 	if timer_frames > 0:
 		timer_frames -= 1
 	_check_round_end()
@@ -203,14 +246,60 @@ func _end_round(widx: int, text: String) -> void:
 	phase_frame = 0
 
 # ---------------------------------------------------------------- efekt/ses
+func _resolve_throws(i1: Inputs, i2: Inputs) -> void:
+	var gap := absf(p2.x - p1.x) - (p1.data.width + p2.data.width) / 2.0
+	if gap > Settings.THROW_RANGE:
+		return
+	var p1t := i1.throw and _can_throw(p1)
+	var p2t := i2.throw and _can_throw(p2)
+	if p1t and p2t:                       # throw tech: ikisi de itilir
+		effects.spawn_throw((p1.x + p2.x) / 2.0, p1.y - p1.data.height * 0.5)
+		p1.vx = -8.0 * p1.facing
+		p2.vx = -8.0 * p2.facing
+		Audio.play("block")
+		hitstop = maxi(hitstop, EffectSystem.HITSTOP_HEAVY)
+		return
+	if p1t and _throwable(p2):
+		_do_throw(p1, p2)
+	elif p2t and _throwable(p1):
+		_do_throw(p2, p1)
+
+func _can_throw(f: Fighter) -> bool:
+	return f.on_ground and (f.state == Fighter.State.IDLE or f.state == Fighter.State.WALK)
+
+func _throwable(f: Fighter) -> bool:
+	return f.on_ground and f.invuln <= 0 \
+		and f.state != Fighter.State.KO and f.state != Fighter.State.DIZZY
+
+func _do_throw(thrower: Fighter, victim: Fighter) -> void:
+	thrower.facing = 1 if victim.x >= thrower.x else -1
+	thrower.set_state(Fighter.State.THROW)
+	thrower.vx = 0.0
+	var atk := AttackData.new("throw", Settings.THROW_DAMAGE, 0, 1, 0,
+		Settings.THROW_HITSTUN, 7.0, 0, 0, 0.5, "high", true)
+	victim.take_hit(atk, thrower.facing, false, Settings.THROW_DAMAGE)
+	var vy := victim.y - victim.data.height * 0.5
+	effects.spawn_throw(victim.x, vy)
+	effects.spawn_impact_ring(victim.x, vy, Color8(255, 160, 200), true)
+	Audio.play("hit_heavy")
+	hitstop = maxi(hitstop, EffectSystem.HITSTOP_HEAVY)
+	thrower.meter = mini(Settings.SUPER_MAX, thrower.meter + Settings.SUPER_GAIN_HIT)
+
 func _spawn_hit_fx(evs: Array) -> void:
 	for e in evs:
+		if e.parry:
+			effects.spawn_parry(e.x, e.y)
+			Audio.play("block")
+			hitstop = maxi(hitstop, EffectSystem.HITSTOP_HEAVY)
+			continue
 		e.attacker.meter = mini(Settings.SUPER_MAX, e.attacker.meter + Settings.SUPER_GAIN_HIT)
 		var defender: Fighter = p2 if e.attacker == p1 else p1
 		defender.meter = mini(Settings.SUPER_MAX, defender.meter + Settings.SUPER_GAIN_TAKEN)
 		effects.spawn_hit(e.x, e.y, e.damage, e.blocked, e.heavy, e.ko)
 		if e.combo >= 2 and not e.blocked:
 			effects.spawn_combo(e.combo, e.attacker == p1)
+		if e.counter:
+			effects.spawn_counter(e.x, e.y)
 		if e.blocked:
 			Audio.play("block")
 			hitstop = maxi(hitstop, EffectSystem.HITSTOP_BLOCK)
@@ -231,6 +320,16 @@ func _whoosh_check() -> void:
 			Audio.play("whoosh", 0.6)
 		_prev_attacking[i] = atk
 
+func _check_dizzy_entry() -> void:
+	for i in range(2):
+		var f: Fighter = p1 if i == 0 else p2
+		var now := f.stunned_left > 0
+		if now and not _prev_dizzy[i]:
+			effects.spawn_dizzy(f.x, f.y - f.data.height * 1.4)
+			effects.add_shake(6.0)
+			Audio.play("hit_heavy")
+		_prev_dizzy[i] = now
+
 func _decay_combos() -> void:
 	for i in range(2):
 		var f: Fighter = p1 if i == 0 else p2
@@ -242,6 +341,9 @@ func _decay_combos() -> void:
 
 func _spawn_move_fx() -> void:
 	for f in [p1, p2]:
+		if f.just_dashed:
+			effects.spawn_dust(f.x - f.dash_dir * 12.0, Settings.FLOOR_Y, -f.dash_dir)
+			Audio.play("whoosh", 0.7)
 		if f.just_jumped:
 			var d := 1 if f.vx > 0.5 else (-1 if f.vx < -0.5 else 0)
 			effects.spawn_dust(f.x, Settings.FLOOR_Y, d)
@@ -306,14 +408,24 @@ func _shot_tick() -> void:
 	if not _shot_mode:
 		return
 	_shot_f += 1
+	if _shot_train:
+		if _shot_f == 20:
+			p2.stunned_left = Settings.DIZZY_FRAMES
+			p2.set_state(Fighter.State.DIZZY)   # yildizlari dogrula
+			p1._start_dash(1)
+		if _shot_f == 26:
+			_save_shot()
+		return
 	if _shot_f == 40:
 		p1.meter = Settings.SUPER_MAX
 		p1.spawn_special = p1.data.special
 	if _shot_f == 62:
-		var img := get_viewport().get_texture().get_image()
-		img.save_png("user://pixelbrawl_shot.png")
-		print("SHOT: " + ProjectSettings.globalize_path("user://pixelbrawl_shot.png"))
-		get_tree().quit()
+		_save_shot()
+
+func _save_shot() -> void:
+	get_viewport().get_texture().get_image().save_png("user://pixelbrawl_shot.png")
+	print("SHOT: " + ProjectSettings.globalize_path("user://pixelbrawl_shot.png"))
+	get_tree().quit()
 
 # ============================================================ CIZIM
 func _draw() -> void:
@@ -323,13 +435,80 @@ func _draw() -> void:
 		_draw_fighter(p2, off); _draw_fighter(p1, off)
 	else:
 		_draw_fighter(p1, off); _draw_fighter(p2, off)
+	for f in [p1, p2]:
+		if f.stunned_left > 0:
+			_draw_stun(f, off)
+		elif f.state == Fighter.State.KO:
+			_draw_ko_decal(f, off)
 	for proj in projectiles:
 		proj.draw(self, off)
 	effects.draw_world(self, off)
 	stage_scene.draw_front(self, cam_x)
 	_draw_hud()
+	if training:
+		_draw_training(off)
 	effects.draw_overlay(self)
 	_draw_banners()
+
+func _draw_training(off: Vector2) -> void:
+	var font := ThemeDB.fallback_font
+	for f in [p1, p2]:
+		var hb: Rect2i = f.hurtbox()
+		var r := Rect2(hb.position.x + off.x, hb.position.y + off.y, hb.size.x, hb.size.y)
+		draw_rect(r, Color(0.3, 0.6, 1.0, 0.16))
+		draw_rect(r, Color(0.5, 0.75, 1.0, 0.9), false, 1.0)
+		var at = f.active_hitbox()
+		if at != null:
+			var a: Rect2i = at
+			var ar := Rect2(a.position.x + off.x, a.position.y + off.y, a.size.x, a.size.y)
+			draw_rect(ar, Color(1.0, 0.3, 0.3, 0.32))
+			draw_rect(ar, Color(1.0, 0.4, 0.4, 0.9), false, 1.0)
+	var s := "Girdi:  "
+	if _last_i1 != null:
+		if _last_i1.move < 0: s += "<  "
+		elif _last_i1.move > 0: s += ">  "
+		if _last_i1.down: s += "v  "
+		if _last_i1.jump: s += "ZIP  "
+		if _last_i1.punch: s += "YUM  "
+		if _last_i1.kick: s += "TEK  "
+		if _last_i1.special: s += "OZL  "
+		if _last_i1.throw: s += "ATM  "
+		if _last_i1.dash != 0: s += "DASH  "
+	draw_string(font, Vector2(40, Settings.HEIGHT - 38), s, HORIZONTAL_ALIGNMENT_LEFT, -1, 22, Settings.WHITE)
+	_text(font, "ANTRENMAN — dummy SONSUZ CAN · T (basili tut): dummy sana saldirir", Settings.WIDTH / 2.0, 116, 22, Settings.HP_MAIN)
+	# --- TEST LISTESI paneli ---
+	var list := [
+		"T (BASILI TUT): dummy sana saldirir -> blok/parry/counter dene",
+		"DASH:  A,A  ya da  D,D   (hayalet iz + toz)",
+		"ZIPLA W    COMEL S",
+		"YUMRUK J    TEKME K    (comel+vurus = alcak)",
+		"BLOK: rakibe dogru GERI tut",
+		"PARRY: blok tam vurus aninda (mavi PARRY!)",
+		"OZEL ATES: L  (metre dolunca)",
+		"ATMA: I  (cok yakinda)",
+		"COUNTER: rakip vururken vur (kirmizi COUNTER!)",
+		"DIZZY: ust uste vur -> yildizlar",
+		"GUARD CRUSH: dummy'ye cok blok yaptir",
+	]
+	var px := 30.0
+	var py := 150.0
+	draw_rect(Rect2(px - 12, py - 26, 480, list.size() * 23.0 + 34), Color(0, 0, 0, 0.5))
+	draw_string(font, Vector2(px, py - 4), "TEST LISTESI", HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Settings.HP_MAIN)
+	for i in list.size():
+		draw_string(font, Vector2(px, py + 22 + i * 23.0), "- " + list[i], HORIZONTAL_ALIGNMENT_LEFT, -1, 16, Settings.WHITE)
+
+func _draw_movelist() -> void:
+	var font := ThemeDB.fallback_font
+	var moves := [
+		"Yürü A/D   Zıpla W   Çömel S   Dash: A/A ya da D/D",
+		"Yumruk J   Tekme K   (çömel+vuruş = alçak, zıpla+vuruş = overhead)",
+		"Blok: rakibe doğru GERİ tut     Parry: tam zamanında blok",
+		"Özel Ateş L (metre dolunca)   Atma I   İptal: isabette L/K",
+	]
+	var y := Settings.HEIGHT / 2.0 + 70.0
+	for m in moves:
+		_text(font, m, Settings.WIDTH / 2.0, y, 20, Settings.WHITE)
+		y += 30.0
 
 func _draw_banners() -> void:
 	if phase == Phase.INTRO:
@@ -343,8 +522,9 @@ func _draw_banners() -> void:
 		var w: Fighter = p1 if wins[0] > wins[1] else p2
 		_banner("KAZANAN: %s" % w.data.name, "ENTER: Tekrar    ESC: Ana menü")
 	if paused:
-		draw_rect(Rect2(0, 0, Settings.WIDTH, Settings.HEIGHT), Color(0, 0, 0, 0.59))
+		draw_rect(Rect2(0, 0, Settings.WIDTH, Settings.HEIGHT), Color(0, 0, 0, 0.62))
 		_banner("DURAKLATILDI", "ESC: Devam    Q: Ana menü")
+		_draw_movelist()
 
 func _text(font: Font, s: String, cx: float, y: float, size: int, col: Color, shadow := true) -> void:
 	var w := font.get_string_size(s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
@@ -386,6 +566,8 @@ func _draw_hud() -> void:
 	var mw := bw * 0.6
 	_meter(40.0, yy + bh + 6.0, mw, 8.0, float(p1.meter) / Settings.SUPER_MAX, true)
 	_meter(Settings.WIDTH - 40.0 - mw, yy + bh + 6.0, mw, 8.0, float(p2.meter) / Settings.SUPER_MAX, false)
+	_guard(40.0, yy + bh + 16.0, mw, 4.0, float(p1.guard_meter) / Settings.GUARD_MAX, true)
+	_guard(Settings.WIDTH - 40.0 - mw, yy + bh + 16.0, mw, 4.0, float(p2.guard_meter) / Settings.GUARD_MAX, false)
 	_wins(bw)
 	var font := ThemeDB.fallback_font
 	var secs := int(ceil(timer_frames / float(Settings.FPS)))
@@ -400,14 +582,14 @@ func _hp_bar(f: Fighter, lag: float, x: float, y: float, bw: float, bh: float, l
 	var mx := float(f.data.max_health)
 	var lag_w := bw * maxf(0.0, lag) / mx
 	var cur_w := bw * maxf(0.0, f.health) / mx
-	for pair in [[lag_w, Settings.HP_LAG], [cur_w, Settings.HP_MAIN]]:
-		var wdt: float = pair[0]
-		if wdt <= 0:
-			continue
+	var rec_w := bw * clampf(float(f.recoverable), 0.0, mx) / mx
+	_hp_seg(x, y, bw, bh, lag_w, left, Settings.HP_LAG)
+	if rec_w > 0:
 		if left:
-			draw_rect(Rect2(x + bw - wdt, y, wdt, bh), pair[1])
+			draw_rect(Rect2(x + bw - cur_w - rec_w, y, rec_w, bh), Settings.HP_RECOVER)
 		else:
-			draw_rect(Rect2(x, y, wdt, bh), pair[1])
+			draw_rect(Rect2(x + cur_w, y, rec_w, bh), Settings.HP_RECOVER)
+	_hp_seg(x, y, bw, bh, cur_w, left, Settings.HP_MAIN)
 	draw_rect(Rect2(x, y, bw, bh), Settings.HP_BORDER, false, 3.0)
 	var font := ThemeDB.fallback_font
 	var ny := y + bh + 24.0
@@ -428,6 +610,42 @@ func _wins(bw: float) -> void:
 			if pair[1]:
 				draw_circle(Vector2(cx, cy), r, Settings.HP_MAIN)
 			draw_arc(Vector2(cx, cy), r, 0, TAU, 20, Settings.WHITE, 2.0)
+
+func _guard(bx: float, by: float, w: float, h: float, frac: float, left: bool) -> void:
+	draw_rect(Rect2(bx, by, w, h), Settings.GUARD_BACK)
+	var cw := w * clampf(frac, 0.0, 1.0)
+	var col := Settings.GUARD_LOW if frac < 0.3 else Settings.GUARD_FILL
+	if left:
+		draw_rect(Rect2(bx + w - cw, by, cw, h), col)
+	else:
+		draw_rect(Rect2(bx, by, cw, h), col)
+
+func _draw_ko_decal(f: Fighter, off: Vector2) -> void:
+	var c := Vector2(f.x + off.x, Settings.FLOOR_Y + 6.0 + off.y)
+	for i in range(7):
+		var a := i * TAU / 7.0 + 0.35
+		draw_line(c, c + Vector2(cos(a), sin(a) * 0.3) * 42.0, Color(0, 0, 0, 0.28), 2.0)
+
+func _draw_stun(f: Fighter, off: Vector2) -> void:
+	var cx := f.x + off.x
+	var cy := f.y + off.y - f.data.height * 1.55 - 6.0   # gorunur basin uzerinde
+	var t := (Settings.DIZZY_FRAMES - f.stunned_left) * 0.18
+	# kalici SERSEM! yazisi (tum stun suresince, sabit)
+	_text(ThemeDB.fallback_font, "SERSEM!", cx, cy - 26.0, 26, Color8(255, 210, 90))
+	for i in range(3):
+		var a := t + i * TAU / 3.0
+		var s := Vector2(cx + cos(a) * 28.0, cy + sin(a) * 9.0)
+		draw_circle(s, 7.0, Color8(40, 30, 10))            # koyu kenar
+		draw_circle(s, 6.0, Color8(255, 220, 90))
+		draw_circle(s, 2.5, Color8(255, 255, 225))
+
+func _hp_seg(x: float, y: float, bw: float, bh: float, w: float, left: bool, col: Color) -> void:
+	if w <= 0:
+		return
+	if left:
+		draw_rect(Rect2(x + bw - w, y, w, bh), col)
+	else:
+		draw_rect(Rect2(x, y, w, bh), col)
 
 func _meter(bx: float, by: float, w: float, h: float, frac: float, left: bool) -> void:
 	draw_rect(Rect2(bx, by, w, h), Settings.SUPER_BACK)
@@ -452,7 +670,19 @@ func _draw_fighter(f: Fighter, off: Vector2) -> void:
 			elif (f.state == Fighter.State.PUNCH or f.state == Fighter.State.KICK) \
 					and f.attack != null and not f.attack_airborne and f.attack.height_frac < 0.4:
 				dy = f.data.height * 0.16
-			var mod := Color(2.4, 2.4, 2.4) if f.hit_flash > 0 else Color.WHITE
+			var mod: Color
+			if f.hit_flash > 0:
+				mod = Color(2.4, 2.4, 2.4)
+			elif f == p2:
+				mod = Color(0.82, 0.88, 1.18)   # P2 palet swap (serin ton)
+			else:
+				mod = Color.WHITE
+			if f.hit_flash > 0:
+				sz = Vector2(sz.x * 1.10, sz.y * 0.92)   # squash & stretch (vurus yiyince)
+			if f.state == Fighter.State.DASH:            # dash hayalet izi (afterimage)
+				for gi in range(1, 3):
+					var gx := f.x - f.dash_dir * gi * 16.0
+					_blit_sprite(tex, gx, f.y + dy, sz, f.facing < 0, Color(1, 1, 1, 0.32 - gi * 0.09), off)
 			_blit_sprite(tex, f.x, f.y + dy, sz, f.facing < 0, mod, off)
 			if f.blocking:
 				_draw_guard(f, off)

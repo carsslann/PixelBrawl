@@ -10,7 +10,7 @@ from collections import deque
 
 import pygame
 
-from . import settings, sprites, stages
+from . import settings, sprites, stages, weapons
 from .fighter import State
 
 
@@ -65,12 +65,32 @@ class Renderer:
                 else:
                     trail.clear()
                 surf.blit(frame, rect)
+                self._draw_blade(surf, f, ox, oy)   # elde/savrulan silah
                 if f.hit_flash:
                     self._flash_sprite(surf, frame, rect)
                 if f.blocking:
                     self._draw_guard(surf, f, ox, oy)
                 return
         self._draw_procedural(surf, f, ox, oy)
+
+    def _draw_blade(self, surf, f, ox=0, oy=0):
+        key = getattr(f, "weapon_key", None)
+        if not key or f.state == State.KO:
+            return
+        try:
+            img = weapons.blade(key, 2.6)
+        except Exception:
+            return
+        if f.facing < 0:
+            img = pygame.transform.flip(img, True, False)
+        if f.state in (State.PUNCH, State.KICK, State.WEAPON) and f.attack is not None:
+            a = f.attack                         # saldiri: one savrulmus
+            cx = f.x + f.facing * (f.data.width * 0.5 + a.hit_w * 0.32)
+            cy = f.y - f.data.height * max(0.34, a.height_frac)
+        else:                                    # yurume/idle: yanda tutulur
+            cx = f.x + f.facing * (f.data.width * 0.42)
+            cy = f.y - f.data.height * 0.46
+        surf.blit(img, img.get_rect(center=(int(cx + ox), int(cy + oy))))
 
     def draw_weapon_arc(self, surf, f, ox=0, oy=0):
         a = f.attack

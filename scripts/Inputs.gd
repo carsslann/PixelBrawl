@@ -9,3 +9,5 @@ var kick: bool = false
 var down: bool = false    # comelme
 var block: bool = false   # dogrudan blok (bot); insan GERI tutarak bloklar
 var special: bool = false # ozel ates
+var dash: int = 0         # cift-tus dash: +1 ileri/sag, -1 geri/sol (0 yok)
+var throw: bool = false   # atma (yakinda tutma)

@@ -4,7 +4,7 @@ extends RefCounted
 ## Saldirilar startup -> active -> recovery kare pencereleriyle isler.
 ## Frame-determinizmi: integer state_frame, _physics_process'ten kare basi update().
 
-enum State { IDLE, WALK, CROUCH, JUMP, PUNCH, KICK, SPECIAL, BLOCK, HITSTUN, KO }
+enum State { IDLE, WALK, CROUCH, JUMP, PUNCH, KICK, SPECIAL, BLOCK, HITSTUN, KO, DASH, DIZZY, THROW }
 
 const NEUTRAL_STATES := [State.IDLE, State.WALK, State.CROUCH, State.BLOCK]
 const ATTACK_STATES := [State.PUNCH, State.KICK]
@@ -35,6 +35,21 @@ var hit_flash: int
 var block_flash: int
 var just_jumped: bool
 var just_landed: bool
+var just_dashed: bool
+# Dalga 1
+var invuln: int          # dokunulmazlik kareleri (backdash / wake-up)
+var recoverable: int     # geri kazanilabilir (gri) can
+var hurt_cd: int         # son hasardan sonra geri-kazanim gecikmesi
+var recover_tick: int
+var dash_dir: int
+# Dalga 2
+var guard_meter: int
+var guard_cd: int
+var stun: int
+var stun_cd: int
+var stunned_left: int    # aktif sersem (stun) sayaci — kilit + gorsel bu sure boyunca
+var armor: int
+var block_frames: int
 
 var alive: bool:
 	get: return health > 0
@@ -68,6 +83,19 @@ func reset(p_x: float, p_facing: int) -> void:
 	block_flash = 0
 	just_jumped = false
 	just_landed = false
+	just_dashed = false
+	invuln = 0
+	recoverable = 0
+	hurt_cd = 0
+	recover_tick = 0
+	dash_dir = 0
+	guard_meter = Settings.GUARD_MAX
+	guard_cd = 0
+	stun = 0
+	stun_cd = 0
+	stunned_left = 0
+	armor = 0
+	block_frames = 0
 
 # ------------------------------------------------------------------ sorgular
 func hurtbox() -> Rect2i:
@@ -107,13 +135,43 @@ func set_state(new_state: State) -> void:
 		state = new_state
 		state_frame = 0
 
-func take_hit(atk: AttackData, attacker_facing: int, blocked: bool, damage: int) -> void:
+func take_hit(atk: AttackData, attacker_facing: int, blocked: bool, damage: int,
+		hitstun_mult := 1.0, parry := false) -> void:
+	hurt_cd = Settings.RECOVER_DELAY
+	# super armor: ozel hareket sirasinda 1 vurus emer (yarim hasar, sersem yok)
+	if armor > 0 and not blocked and health > 0:
+		armor -= 1
+		var ad := maxi(1, int(damage * 0.5))
+		health = max(0, health - ad)
+		recoverable = maxi(0, recoverable - ad)
+		hit_flash = 6
+		if health <= 0:
+			set_state(State.KO)
+			vx = attacker_facing * atk.knockback * 1.4
+			if on_ground:
+				vy = -6.0
+				on_ground = false
+		return
 	if blocked:
+		if parry:                    # just-defend: hasar yok, guard geri gelir
+			guard_meter = mini(Settings.GUARD_MAX, guard_meter + 20)
+			block_flash = 12
+			return
 		health = max(0, health - max(1, damage))
+		recoverable = mini(data.max_health, recoverable + maxi(1, damage))
 		vx = attacker_facing * atk.knockback * Settings.BLOCK_PUSHBACK_RATIO
 		block_flash = 8
+		guard_meter -= Settings.GUARD_DRAIN + damage
+		if guard_meter <= 0:         # guard crush -> baygin
+			guard_meter = Settings.GUARD_MAX
+			stunned_left = Settings.DIZZY_FRAMES
+			blocking = false
+			set_state(State.DIZZY)
 		return
 	health = max(0, health - damage)
+	recoverable = maxi(0, recoverable - damage)
+	stun = mini(Settings.STUN_MAX, stun + Settings.STUN_PER_HIT)
+	stun_cd = Settings.STUN_DECAY_DELAY
 	vx = attacker_facing * atk.knockback
 	hit_flash = 6
 	attack = null
@@ -129,7 +187,7 @@ func take_hit(atk: AttackData, attacker_facing: int, blocked: bool, damage: int)
 			on_ground = false
 		return
 	knocked_down = atk.knockdown
-	hitstun_left = int(atk.hitstun * (1.7 if atk.knockdown else 1.0))
+	hitstun_left = int(atk.hitstun * (1.7 if atk.knockdown else 1.0) * hitstun_mult)
 	if atk.knockdown and on_ground:
 		vy = -5.5
 		on_ground = false
@@ -150,6 +208,7 @@ func _start_special() -> void:
 	_special = spec
 	spawn_special = null
 	attack = null
+	armor = Settings.ARMOR_HITS   # ozel harekette super armor
 	vx = 0.0
 	set_state(State.SPECIAL)
 
@@ -158,23 +217,81 @@ func _update_special() -> void:
 	var spec := _special
 	if spec == null or state_frame >= spec.total:
 		_special = null
+		armor = 0
 		set_state(State.IDLE)
 	elif state_frame == spec.cast:
 		spawn_special = spec
 	_physics()
 
+func _start_dash(dir: int) -> void:
+	dash_dir = dir
+	just_dashed = true
+	var forward := dir == facing
+	set_state(State.DASH)
+	vx = dir * Settings.DASH_SPEED
+	if not forward:
+		invuln = Settings.BACKDASH_IFRAMES   # backdash = kacinma penceresi
+
+func _recover_regen() -> void:
+	if hurt_cd > 0 or recoverable <= 0:
+		return
+	if state == State.KO or state == State.HITSTUN:
+		return
+	recover_tick += 1
+	if recover_tick >= Settings.RECOVER_RATE:
+		recover_tick = 0
+		if health < data.max_health:
+			health += 1
+		recoverable -= 1
+
 # ------------------------------------------------------ ana guncelleme (kare)
 func update(inputs: Inputs, opponent: Fighter) -> void:
 	state_frame += 1
+	# guard/stun bakimi (onceki karenin blocking durumuna gore)
+	if blocking:
+		block_frames += 1
+		guard_cd = Settings.GUARD_REGEN_DELAY
+	else:
+		block_frames = 0
+		if guard_cd > 0:
+			guard_cd -= 1
+		elif guard_meter < Settings.GUARD_MAX:
+			guard_meter = mini(Settings.GUARD_MAX, guard_meter + Settings.GUARD_REGEN)
+	if stun_cd > 0:
+		stun_cd -= 1
+	elif stun > 0:
+		stun = maxi(0, stun - Settings.STUN_DECAY)
 	just_jumped = false
 	just_landed = false
+	just_dashed = false
 	blocking = false
 	if hit_flash > 0:
 		hit_flash -= 1
 	if block_flash > 0:
 		block_flash -= 1
+	if invuln > 0:
+		invuln -= 1
+	if hurt_cd > 0:
+		hurt_cd -= 1
+	if stunned_left > 0:
+		stunned_left -= 1     # sersem sayaci her zaman iSler (vurulsa bile)
+	_recover_regen()
 
 	if state == State.KO:
+		_physics()
+		return
+
+	if state == State.DIZZY:
+		vx = 0.0                 # sersem: yerinde donar, hareket edemez (stun)
+		if stunned_left <= 0:
+			set_state(State.IDLE)
+		_physics()
+		return
+
+	if state == State.THROW:
+		vx = 0.0
+		if state_frame >= 14:
+			set_state(State.IDLE)
 		_physics()
 		return
 
@@ -184,8 +301,17 @@ func update(inputs: Inputs, opponent: Fighter) -> void:
 	if state == State.HITSTUN:
 		hitstun_left -= 1
 		if hitstun_left <= 0 and on_ground:
+			if knocked_down:
+				invuln = Settings.WAKEUP_IFRAMES   # kalkista dokunulmazlik
 			knocked_down = false
-			set_state(State.IDLE)
+			if stunned_left > 0:
+				set_state(State.DIZZY)       # hala sersem -> tekrar kilitlen
+			elif stun >= Settings.STUN_MAX:
+				stun = 0
+				stunned_left = Settings.DIZZY_FRAMES
+				set_state(State.DIZZY)
+			else:
+				set_state(State.IDLE)
 		_physics()
 		return
 
@@ -195,6 +321,14 @@ func update(inputs: Inputs, opponent: Fighter) -> void:
 
 	if state == State.SPECIAL:
 		_update_special()
+		return
+
+	if state == State.DASH:
+		if state_frame >= Settings.DASH_FRAMES:
+			set_state(State.IDLE)
+		else:
+			vx *= 0.90
+		_physics()
 		return
 
 	if state == State.JUMP:
@@ -229,6 +363,8 @@ func update(inputs: Inputs, opponent: Fighter) -> void:
 		just_jumped = true
 		vy = data.jump_vy
 		vx = inputs.move * data.jump_vx
+	elif inputs.dash != 0:
+		_start_dash(inputs.dash)
 	elif inputs.down:
 		blocking = block_req            # comel-blok (geri de tutuluyorsa)
 		vx = 0.0
@@ -243,8 +379,12 @@ func update(inputs: Inputs, opponent: Fighter) -> void:
 	_physics()
 
 func _update_attack(inputs: Inputs) -> void:
-	# zincir iptali: saldiri isabet ettiyse daha yuksek kademeye gec
+	# iptal: saldiri isabet ettiyse ozel harekete ya da daha yuksek kademeye gec
 	if attack_has_hit and not attack_airborne:
+		if inputs.special and data.special != null and meter >= data.special.meter_cost:
+			_start_special()
+			_physics()
+			return
 		var nxt = _cancel_target(inputs)
 		if nxt != null:
 			_start_attack(nxt[0], nxt[1], false)

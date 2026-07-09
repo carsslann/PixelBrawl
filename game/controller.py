@@ -101,7 +101,7 @@ class HumanController(Controller):
                 else:
                     inp.punch = True
             if kick_down:
-                if self._qcb():             # ↓←+K = ozel silah
+                if self._qcb():             # ↓←+K = silah ozel hareketi
                     inp.weapon = True
                     self.t_down = self.t_back = -999
                 else:

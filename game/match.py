@@ -10,7 +10,7 @@ from enum import Enum, auto
 import pygame
 
 from . import (audio, combat, effects, fx_sprites, hud, projectile, renderer,
-               screens, settings, stages)
+               screens, settings, stages, weapons)
 from .characters import CHARACTERS, CHARACTER_ORDER, AttackData
 from .controller import (AIController, HumanController, Inputs,
                          DIFFICULTY_LABELS, P1_KEYS, P2_KEYS)
@@ -45,9 +45,12 @@ class Phase(Enum):
 
 
 class Match:
-    def __init__(self, p1_char: str, p2_char: str, c1, c2, difficulty_label: str = ""):
+    def __init__(self, p1_char: str, p2_char: str, c1, c2, difficulty_label: str = "",
+                 p1_weapon: str = None, p2_weapon: str = None):
         self.p1 = Fighter(CHARACTERS[p1_char], P1_START_X, 1)
         self.p2 = Fighter(CHARACTERS[p2_char], P2_START_X, -1)
+        self.p1.equip(p1_weapon)     # secilen silah tum saldirilari olcekler
+        self.p2.equip(p2_weapon)
         self.c1, self.c2 = c1, c2
         self.wins = [0, 0]
         self.round_num = 1
@@ -174,6 +177,14 @@ class Match:
                                    heavy=ev.heavy, ko=ev.ko)
             if ev.combo >= 2 and not ev.blocked:
                 self.effects.spawn_combo(ev.combo, ev.attacker is self.p1)
+            # yakin (silah) vurusunda silaha ozel efekt (hilal/shuriken/isin...)
+            if ev.melee and not ev.blocked and ev.attacker.weapon_key:
+                wd = weapons.WEAPONS.get(ev.attacker.weapon_key)
+                if wd is not None:
+                    ci = ev.attacker.data.special.color if ev.attacker.data.special else 0
+                    self.effects.spawn_anim(
+                        fx_sprites.effect_frames(wd.effect_kind, ci, scale=3.0),
+                        ev.x, ev.y, fps=26)
             col = ev.attacker.data.color   # tema-renkli halka (D18)
             if ev.blocked:
                 audio.play("block")
@@ -403,7 +414,9 @@ def run(screen, clock, config) -> str:
     mode = config.get("mode", "pve")
     if mode == "arcade":
         return run_arcade(screen, clock, config)
+    p1w = config.get("p1_weapon") or weapons.WEAPON_ORDER[0]
     while True:
+        p2w = config.get("p2_weapon") or random.choice(weapons.WEAPON_ORDER)
         if mode == "pvp":
             c1 = HumanController(P1_KEYS)
             c2 = HumanController(P2_KEYS)
@@ -413,7 +426,7 @@ def run(screen, clock, config) -> str:
             c2 = AIController(config["difficulty"])
             label = DIFFICULTY_LABELS[config["difficulty"]]
         m = _run_match(screen, clock,
-                       Match(config["p1"], config["p2"], c1, c2, label))
+                       Match(config["p1"], config["p2"], c1, c2, label, p1w, p2w))
         if m.result != "rematch":
             return m.result
 
@@ -428,7 +441,9 @@ def run_arcade(screen, clock, config) -> str:
                                   sub=f"Rakip: {CHARACTERS[opp].name}") == "quit":
             return "quit"
         m = Match(p1, opp, HumanController(P1_KEYS),
-                  AIController(difficulty), DIFFICULTY_LABELS[difficulty])
+                  AIController(difficulty), DIFFICULTY_LABELS[difficulty],
+                  config.get("p1_weapon") or weapons.WEAPON_ORDER[0],
+                  random.choice(weapons.WEAPON_ORDER))
         while m.phase != Phase.MATCH_OVER:
             events = pygame.event.get()
             pressed = pygame.key.get_pressed()

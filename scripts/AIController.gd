@@ -79,6 +79,12 @@ func get_inputs(me: Fighter, opp: Fighter) -> Inputs:
 		want_attack = ""
 		move = 0
 
+	# throw: cok yakinsa ara sira tut
+	if gap < Settings.THROW_RANGE and (me.state == Fighter.State.IDLE or me.state == Fighter.State.WALK) \
+			and randf() < float(p["aggression"]) * 0.06:
+		inp.throw = true
+		return inp
+
 	# ozel ates: metre dolu + orta mesafe -> ara sira firlat (zorlukla olcekli)
 	if me.data.special != null and me.meter >= me.data.special.meter_cost \
 			and (me.state == Fighter.State.IDLE or me.state == Fighter.State.WALK) \
