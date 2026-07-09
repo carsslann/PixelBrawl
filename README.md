@@ -98,25 +98,6 @@ ayakta.
 - **Hareket izi** (afterimage) hızlı hareket ve saldırılarda; **kazanma pozu**
   (maç sonu kazanan sevinir); round başı **VS açılışı**.
 
-## Silahlar (Mortal Kombat tarzı seçim)
-
-Menüde karakterinin yanında bir **silah** seç (stat çubukları + ikon görünür).
-Seçtiğin silah **tüm vuruşlarını** (yumruk/tekme/kombo/hava/süpürme + silah
-özel hareketi) ölçekler ve dövüş boyunca **karakterin elinde** durur; isabette
-silaha özel efekt (hilal/shuriken/ışın/büyü) çıkar.
-
-| Silah | His | Efekt |
-|-------|-----|-------|
-| Kılıç | dengeli | hilal |
-| Balta | yavaş-güçlü, çok savurma | hilal |
-| Hançer | hızlı-kısa | hilal |
-| Mızrak | uzun menzil | shuriken |
-| Topuz | ağır, en çok savurma | ışın |
-| Asa | hızlı-büyü | büyü girdabı |
-
-Silah, karakterin **arketipiyle birleşir**: hız/hasar/menzil/knockback çarpanları
-karakterin temel saldırılarına uygulanır (`game/weapons.py`).
-
 ## Karakterler
 
 | Karakter | Arketip | Sprite |
@@ -146,8 +127,7 @@ game/
   sprites.py       Kenney poz-başına PNG yükleyici + animasyon (kazanma cheer dahil)
   stages.py        10 sahne + PARALLAX (Scene: derinlikli katmanlar, kamera salınımı)
   projectile.py    uçan mermi (özel ateş) sınıfı + make_fireball fabrikası
-  fx_sprites.py    atesefekt yükleyici (ateş/patlama + slash/star/beam/swirl/pillar)
-  weapons.py       seçilebilir silahlar (equipments/): stat + ikon + elde sprite
+  fx_sprites.py    atesefekt sheet yükleyici (renk başına ateş topu / patlama)
   screens.py       hareket listesi + arcade pankart ekranları
   settings_screen.py  ayarlar ekranı (ses / tam ekran / tuş atama)
   config.py        ayar kalıcılığı (assets/config.json)

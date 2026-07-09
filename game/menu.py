@@ -2,7 +2,7 @@
 
 import pygame
 
-from . import audio, screens, settings, sprites, weapons
+from . import audio, screens, settings, sprites
 from .characters import CHARACTERS, CHARACTER_ORDER
 from .controller import DIFFICULTY_LABELS, DIFFICULTY_ORDER
 from .hud import load_font
@@ -14,13 +14,12 @@ MODE_LABELS = {"pve": "Tek Kişi (Bot)", "pvp": "2 Kişi (PvP)", "arcade": "Arca
 
 class Menu:
     def __init__(self):
-        self.rows = ["mode", "p1", "weapon", "p2", "difficulty"]
-        self.row_labels = {"mode": "MOD", "p1": "KARAKTERİN", "weapon": "SİLAH",
+        self.rows = ["mode", "p1", "p2", "difficulty"]
+        self.row_labels = {"mode": "MOD", "p1": "KARAKTERİN",
                            "p2": "RAKİP", "difficulty": "ZORLUK"}
         self.selected_row = 0
         self.mode_idx = 0
         self.p1_idx = 0
-        self.weapon_idx = 0
         self.p2_idx = 1
         self.diff_idx = 1  # orta
         self.font_title = load_font(88)
@@ -49,7 +48,6 @@ class Menu:
                         return {
                             "mode": MODES[self.mode_idx],
                             "p1": CHARACTER_ORDER[self.p1_idx],
-                            "p1_weapon": weapons.WEAPON_ORDER[self.weapon_idx],
                             "p2": CHARACTER_ORDER[self.p2_idx],
                             "difficulty": DIFFICULTY_ORDER[self.diff_idx],
                         }
@@ -84,8 +82,6 @@ class Menu:
             self.mode_idx = (self.mode_idx + step) % len(MODES)
         elif row == "p1":
             self.p1_idx = (self.p1_idx + step) % len(CHARACTER_ORDER)
-        elif row == "weapon":
-            self.weapon_idx = (self.weapon_idx + step) % len(weapons.WEAPON_ORDER)
         elif row == "p2":
             self.p2_idx = (self.p2_idx + step) % len(CHARACTER_ORDER)
         else:
@@ -97,32 +93,9 @@ class Menu:
             return MODE_LABELS[MODES[self.mode_idx]]
         if row == "p1":
             return CHARACTERS[CHARACTER_ORDER[self.p1_idx]].name
-        if row == "weapon":
-            return weapons.WEAPONS[weapons.WEAPON_ORDER[self.weapon_idx]].name
         if row == "p2":
             return CHARACTERS[CHARACTER_ORDER[self.p2_idx]].name
         return DIFFICULTY_LABELS[DIFFICULTY_ORDER[self.diff_idx]]
-
-    def _draw_weapon_panel(self, surf, cx):
-        wk = weapons.WEAPON_ORDER[self.weapon_idx]
-        wd = weapons.WEAPONS[wk]
-        py = 578
-        ic = weapons.icon(wk, 72)
-        surf.blit(ic, ic.get_rect(center=(cx - 150, py)))
-        nm = self.font_sub.render(wd.name, True, settings.HP_MAIN)
-        surf.blit(nm, nm.get_rect(midleft=(cx - 108, py - 30)))
-        stats = [("Hasar", wd.damage_mult), ("Menzil", wd.reach_mult),
-                 ("Hız", wd.speed_mult)]
-        for i, (lbl, mult) in enumerate(stats):
-            by = py - 8 + i * 20
-            t = self.font_help.render(lbl, True, settings.WHITE)
-            surf.blit(t, t.get_rect(midright=(cx + 2, by)))
-            bar = pygame.Rect(cx + 12, by - 7, 150, 14)
-            pygame.draw.rect(surf, (48, 48, 64), bar)
-            frac = max(0.06, min(1.0, mult - 0.5))   # 0.5->bos, 1.5->dolu
-            pygame.draw.rect(surf, settings.SUPER_FILL,
-                             (bar.x, bar.y, int(bar.w * frac), bar.h))
-            pygame.draw.rect(surf, settings.WHITE, bar, 1)
 
     def _draw(self, surf):
         surf.fill(settings.SKY_TOP)
@@ -138,7 +111,7 @@ class Menu:
 
         # secim satirlari
         for i, row in enumerate(self.rows):
-            y = 292 + i * 56
+            y = 330 + i * 70
             selected = i == self.selected_row
             color = settings.HP_MAIN if selected else settings.WHITE
             label = self.font_row.render(self.row_labels[row], True, color)
@@ -147,7 +120,6 @@ class Menu:
                 else self._row_value(row)
             val = self.font_row.render(value, True, color)
             surf.blit(val, val.get_rect(midleft=(cx + 40, y)))
-        self._draw_weapon_panel(surf, cx)
 
         # karakter onizleme (secili karakterlerin idle sprite'i)
         base_y = 585
@@ -165,9 +137,6 @@ class Menu:
                 if side > 0:
                     sprite = pygame.transform.flip(sprite, True, False)
                 surf.blit(sprite, sprite.get_rect(midbottom=(x, base_y)))
-                if side < 0:   # p1: secili silahi elinde goster
-                    bl = weapons.blade(weapons.WEAPON_ORDER[self.weapon_idx], 3.0)
-                    surf.blit(bl, bl.get_rect(center=(x + 55, base_y - 150)))
             else:
                 body = pygame.Rect(0, 0, data.width, data.height)
                 body.midbottom = (x, base_y)

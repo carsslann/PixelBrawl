@@ -16,7 +16,7 @@ import pygame  # noqa: E402
 pygame.init()
 pygame.display.set_mode((1280, 720))
 
-from game import combat, effects, fx_sprites, projectile, settings, sprites  # noqa: E402
+from game import combat, effects, projectile, settings, sprites  # noqa: E402
 from game.characters import CHARACTERS, CHARACTER_ORDER, AttackData  # noqa: E402
 from game.controller import AIController, Inputs  # noqa: E402
 from game.fighter import Fighter, State  # noqa: E402
@@ -386,32 +386,6 @@ def test_pvp_two_humans():
         m.update([], pressed)
         m.draw(surf)
     assert m.result is None, "PvP maci iki insan kontrolcuyle sorunsuz kosmali"
-
-
-def test_weapon_scales_all_attacks():
-    a = Fighter(CHARACTERS[A], 600, 1)
-    base_p, base_k = a.mv["punch"].damage, a.mv["kick"].damage
-    a.equip("balta")                       # agir: hasar x1.35
-    assert a.mv["punch"].damage > base_p and a.mv["kick"].damage > base_k
-    a.equip("hancer")                      # hizli: startup azalir
-    assert a.mv["punch"].startup <= CHARACTERS[A].punch.startup
-
-
-def test_weapon_persists_through_reset():
-    a = Fighter(CHARACTERS[A], 600, 1)
-    a.equip("balta")
-    d1 = a.mv["punch"].damage
-    a.reset(600, 1)
-    assert a.mv["punch"].damage == d1 and a.weapon_key == "balta"
-
-
-def test_weapon_effect_kinds_load():
-    from game import weapons
-    for key in weapons.WEAPON_ORDER:
-        wd = weapons.WEAPONS[key]
-        assert fx_sprites.effect_frames(wd.effect_kind, 0, scale=2.0), \
-            f"{key} efekti ({wd.effect_kind}) yuklenemedi"
-        assert weapons.icon(key, 48) and weapons.blade(key)
 
 
 def test_character_moves_data():

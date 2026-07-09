@@ -13,7 +13,6 @@ Hareket seti:
   bir saldiriya iptal edilebilir (yumruk -> tekme/supurme).
 """
 
-import dataclasses
 from enum import Enum, auto
 
 import pygame
@@ -48,47 +47,7 @@ def _sign(x: float) -> int:
 class Fighter:
     def __init__(self, data: CharacterData, x: float, facing: int):
         self.data = data
-        self.weapon_key = None     # kusanilmis silah (match atar); tum vuruslari olcekler
         self.reset(x, facing)
-
-    def equip(self, weapon_key):
-        self.weapon_key = weapon_key
-        self._build_attacks()
-
-    def _weapon_mult(self):
-        if not self.weapon_key:
-            return None
-        try:
-            from . import weapons
-            return weapons.WEAPONS.get(self.weapon_key)
-        except Exception:
-            return None
-
-    @staticmethod
-    def _scale(atk, w):
-        if w is None:
-            return atk
-        return dataclasses.replace(
-            atk,
-            damage=max(1, round(atk.damage * w.damage_mult)),
-            hit_w=max(8, round(atk.hit_w * w.reach_mult)),
-            knockback=atk.knockback * w.knockback_mult,
-            startup=max(1, round(atk.startup / w.speed_mult)),
-            recovery=max(1, round(atk.recovery / w.speed_mult)))
-
-    def _build_attacks(self):
-        """Kusanilmis silaha gore TUM saldirilarin olceklenmis surumleri."""
-        d = self.data
-        w = self._weapon_mult()
-        self.mv = {
-            "punch": self._scale(d.punch, w),
-            "kick": self._scale(d.kick, w),
-            "crouch_punch": self._scale(d.crouch_punch, w),
-            "sweep": self._scale(d.sweep, w),
-            "jump_punch": self._scale(d.jump_punch, w),
-            "jump_kick": self._scale(d.jump_kick, w),
-        }
-        self.weapon_attack = self._scale(d.weapon.attack, w) if d.weapon else None
 
     def reset(self, x: float, facing: int):
         self.x = float(x)
@@ -118,7 +77,6 @@ class Fighter:
         self.block_flash = 0
         self.just_jumped = False
         self.just_landed = False
-        self._build_attacks()      # kusanilmis silaha gore olceklenmis saldirilar
 
     # ------------------------------------------------------------------
     # sorgular
@@ -227,7 +185,7 @@ class Fighter:
     def _start_weapon(self):
         w = self.data.weapon
         self.meter = max(0, self.meter - w.meter_cost)
-        self.attack = self.weapon_attack or w.attack   # kusanilmis silah stat'lari
+        self.attack = w.attack
         self.attack_has_hit = False
         self.blocking = False
         if w.anti_air:                # yukselen vurus (anti-air)
@@ -296,8 +254,8 @@ class Fighter:
         if self.state == State.JUMP:
             # havada tek bir saldiri hakki
             if not self.attack_airborne and (inputs.punch or inputs.kick):
-                atk = self.mv["jump_kick"] if inputs.kick and not inputs.punch \
-                    else self.mv["jump_punch"]
+                atk = self.data.jump_kick if inputs.kick and not inputs.punch \
+                    else self.data.jump_punch
                 st = State.KICK if (inputs.kick and not inputs.punch) else State.PUNCH
                 self._start_attack(st, atk, airborne=True)
                 self._update_attack(inputs)
@@ -320,12 +278,12 @@ class Fighter:
             self._start_special()
         elif (inputs.weapon and self.data.weapon is not None
                 and self.meter >= self.data.weapon.meter_cost):
-            self._start_weapon()          # ↓←+K: silah ozel hareketi (metre)
+            self._start_weapon()
         elif inputs.punch or inputs.special:   # ozel niyeti + metre yok -> yumruk
-            atk = self.mv["crouch_punch"] if inputs.down else self.mv["punch"]
+            atk = self.data.crouch_punch if inputs.down else self.data.punch
             self._start_attack(State.PUNCH, atk, airborne=False)
         elif inputs.kick or inputs.weapon:     # silah niyeti + metre yok -> tekme
-            atk = self.mv["sweep"] if inputs.down else self.mv["kick"]
+            atk = self.data.sweep if inputs.down else self.data.kick
             self._start_attack(State.KICK, atk, airborne=False)
         elif inputs.jump and not inputs.down:
             self.set_state(State.JUMP)
@@ -379,11 +337,11 @@ class Fighter:
         """İsabet sonrasi izin verilen zincir hedefi (daha yuksek kademe)."""
         cur = self.attack.chain if self.attack else 0
         if inputs.kick:
-            atk = self.mv["sweep"] if inputs.down else self.mv["kick"]
+            atk = self.data.sweep if inputs.down else self.data.kick
             if atk.chain > cur:
                 return State.KICK, atk
         if inputs.punch:
-            atk = self.mv["crouch_punch"] if inputs.down else self.mv["punch"]
+            atk = self.data.crouch_punch if inputs.down else self.data.punch
             if atk.chain > cur:
                 return State.PUNCH, atk
         return None

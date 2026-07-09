@@ -10,7 +10,7 @@ from collections import deque
 
 import pygame
 
-from . import rig, settings, sprites, stages, weapons
+from . import settings, sprites, stages
 from .fighter import State
 
 
@@ -43,12 +43,6 @@ class Renderer:
     # ------------------------------------------------------------------
     def draw_fighter(self, surf: pygame.Surface, f, ox=0, oy=0):
         self._draw_shadow(surf, f, ox, oy)
-        # silah kusanmis dovuscu: parca-rig (silah elde kavranmis + savrulur)
-        if (getattr(f, "weapon_key", None) and rig.available(f.data)
-                and rig.draw(surf, f, ox, oy)):
-            if f.blocking:
-                self._draw_guard(surf, f, ox, oy)
-            return
         animator = self._animator_for(f)
         if animator is not None:
             frame = animator.frame_for(f)
@@ -77,54 +71,6 @@ class Renderer:
                     self._draw_guard(surf, f, ox, oy)
                 return
         self._draw_procedural(surf, f, ox, oy)
-
-    def _blit_weapon(self, surf, img0, pivot, angle, facing, alpha=255):
-        """Silahi KABZASINDAN (pivot) tutup verilen aci ile dondururup cizer.
-
-        img0: kabza solda, uc sagda (weapons.blade). facing<0 aynalanir.
-        angle: derece; 0=one dogru, + = uc yukari.
-        """
-        img = img0
-        a = angle
-        if facing < 0:
-            img = pygame.transform.flip(img0, True, False)  # kabza saga gecer
-            a = 180 - angle
-        hx = 0 if facing >= 0 else img.get_width()
-        hilt = pygame.math.Vector2(hx, img.get_height() / 2)
-        center = pygame.math.Vector2(img.get_width() / 2, img.get_height() / 2)
-        offset = (center - hilt).rotate(-a)     # pivot -> donmus merkez
-        rot = pygame.transform.rotate(img, a)
-        if alpha < 255:
-            rot = rot.copy()
-            rot.set_alpha(alpha)
-        surf.blit(rot, rot.get_rect(center=(pivot[0] + offset.x, pivot[1] + offset.y)))
-
-    def _draw_blade(self, surf, f, ox=0, oy=0):
-        key = getattr(f, "weapon_key", None)
-        if not key or f.state == State.KO:
-            return
-        try:
-            img0 = weapons.blade(key, 2.8)
-        except Exception:
-            return
-        fc = f.facing
-        W, H = f.data.width, f.data.height
-        attacking = (f.state in (State.PUNCH, State.KICK, State.WEAPON)
-                     and f.attack is not None)
-        if attacking:
-            # yukaridan one savurma yayi (kabza omuzda, uc yay cizer)
-            prog = max(0.0, min(1.0, f.state_frame / max(1, f.attack.total)))
-            px = f.x + ox + fc * (H * 0.14)      # omuz
-            py = f.y + oy - H * 0.60
-            for k in range(3, 0, -1):            # hareket izi (onceki acilar)
-                gp = max(0.0, prog - k * 0.07)
-                self._blit_weapon(surf, img0, (px, py), 95 - 155 * gp ** 0.75,
-                                  fc, alpha=38)
-            self._blit_weapon(surf, img0, (px, py), 95 - 155 * prog ** 0.75, fc)
-        else:                                    # hazir: elde (yandaki el), uc one-asagi
-            px = f.x + ox + fc * (H * 0.40)
-            py = f.y + oy - H * 0.27
-            self._blit_weapon(surf, img0, (px, py), -18, fc)
 
     def draw_weapon_arc(self, surf, f, ox=0, oy=0):
         a = f.attack
