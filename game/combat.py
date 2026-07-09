@@ -1,26 +1,41 @@
-"""Vurus cozumu ve govde itisme kurallari."""
+"""Vurus cozumu, blok kurallari, kombo sayaci ve govde itisme."""
 
 from dataclasses import dataclass
 
 from . import settings
 from .fighter import Fighter, State
 
+# kombo icinde sonraki vuruslar daha az hasar (sonsuz kombo olmasin)
+COMBO_SCALE = [1.0, 0.9, 0.8, 0.7, 0.6, 0.5]
+
 
 @dataclass
 class HitEvent:
-    x: float          # isabet noktasi (efektler icin)
+    x: float
     y: float
     damage: int
     blocked: bool
-    heavy: bool       # agir vurus (tekme) -> daha buyuk efekt/sarsinti
-    ko: bool          # bu vurus rakibi nakavt etti
+    heavy: bool
+    ko: bool
+    attacker: Fighter
+    combo: int = 1        # saldiranin bu andaki kombo sayisi
+    knockdown: bool = False
+
+
+def _guard_ok(stance: str, guard: str) -> bool:
+    """Blok duruSu saldirinin yuksekligini kesebiliyor mu?"""
+    if stance == "stand":
+        return guard in ("high", "overhead")   # ayakta: overhead+yuksek, alcak GECER
+    if stance == "crouch":
+        return guard in ("high", "low")         # cömel: yuksek+alcak, overhead GECER
+    return False
 
 
 def resolve_hits(a: Fighter, b: Fighter) -> list[HitEvent]:
     """Iki dovuscunun aktif vuruslarini cozer, isabet olaylarini dondurur.
 
-    Iki taraf ayni karede isabet ettirirse (trade) ikisi de hasar alir;
-    bu yuzden once iki isabet de tespit edilir, sonra uygulanir.
+    Ayni karede iki taraf da isabet ettirirse (trade) ikisi de yer;
+    once iki isabet tespit edilir, sonra uygulanir.
     """
     events: list[HitEvent] = []
     hit_ab = _lands(a, b)
@@ -36,19 +51,38 @@ def resolve_hits(a: Fighter, b: Fighter) -> list[HitEvent]:
 
 
 def _apply(attacker: Fighter, defender: Fighter, attack) -> HitEvent:
+    cx, cy = _hit_point(attacker, defender)
+    stance = defender.block_stance()
+    blocked = stance is not None and _guard_ok(stance, attack.guard)
+
+    if blocked:
+        attacker.combo_count = 0
+        dmg = max(1, round(attack.damage * settings.CHIP_DAMAGE_RATIO))
+    else:
+        if defender.state == State.HITSTUN:   # süregelen kombo
+            attacker.combo_count += 1
+        else:
+            attacker.combo_count = 1
+        scale = COMBO_SCALE[min(len(COMBO_SCALE) - 1, attacker.combo_count - 1)]
+        dmg = max(1, round(attack.damage * scale))
+
+    defender.take_hit(attack, attacker.facing, blocked, dmg)
+    heavy = attack.knockback >= 9.0 or attack.knockdown
+    return HitEvent(cx, cy, dmg, blocked, heavy,
+                    ko=(defender.state == State.KO), attacker=attacker,
+                    combo=attacker.combo_count,
+                    knockdown=attack.knockdown and not blocked)
+
+
+def _hit_point(attacker: Fighter, defender: Fighter):
     hb = attacker.active_hitbox()
     box = defender.hurtbox()
-    # isabet noktasi: vurus kutusu ile govdenin ortak alaninin ortasi
     if hb is not None:
         clip = hb.clip(box)
         cx = clip.centerx if clip.width else (hb.centerx + box.centerx) // 2
         cy = clip.centery if clip.height else (hb.centery + box.centery) // 2
-    else:
-        cx, cy = box.centerx, box.top
-    blocked = defender.state == State.BLOCK
-    defender.take_hit(attack, attacker.facing)
-    return HitEvent(cx, cy, attack.damage, blocked,
-                    heavy=attack.knockback >= 9.0, ko=(defender.state == State.KO))
+        return cx, cy
+    return box.centerx, box.top
 
 
 def _lands(attacker: Fighter, defender: Fighter) -> bool:
@@ -72,7 +106,6 @@ def push_apart(a: Fighter, b: Fighter):
     right_f.x += shift
     _clamp(left_f)
     _clamp(right_f)
-    # duvara sikisma: taraflardan biri duvarda kaldiysa digerini ittir
     ra, rb = a.hurtbox(), b.hurtbox()
     if ra.colliderect(rb):
         overlap = min(ra.right, rb.right) - max(ra.left, rb.left)

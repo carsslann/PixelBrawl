@@ -85,8 +85,10 @@ class EffectSystem:
         self.numbers: list[_DamageNumber] = []
         self.shake = 0.0
         self.flash = 0          # tam ekran beyaz parlama (KO)
+        self.combo = None       # [count, life, left_side] kombo pankarti
         self._font_big = load_font(46)
         self._font_med = load_font(34)
+        self._font_combo = load_font(44)
 
     # ------------------------------------------------------------------
     def reset(self):
@@ -94,6 +96,7 @@ class EffectSystem:
         self.numbers.clear()
         self.shake = 0.0
         self.flash = 0
+        self.combo = None
 
     def add_shake(self, amount: float):
         self.shake = max(self.shake, amount)
@@ -118,6 +121,9 @@ class EffectSystem:
         if ko:
             self.flash = 8
             self.add_shake(16)
+
+    def spawn_combo(self, count, left_side):
+        self.combo = [count, 46, bool(left_side)]
 
     def spawn_dust(self, x, y, direction=0):
         """Zipla/in isinde ayak dumani."""
@@ -153,6 +159,10 @@ class EffectSystem:
             self.shake = 0.0
         if self.flash > 0:
             self.flash -= 1
+        if self.combo is not None:
+            self.combo[1] -= 1
+            if self.combo[1] <= 0:
+                self.combo = None
 
     def shake_offset(self):
         if self.shake <= 0:
@@ -169,7 +179,27 @@ class EffectSystem:
         """HUD ustunde, sarsintisiz cizilen efektler: hasar sayilari + flash."""
         for d in self.numbers:
             d.draw(surf, 0, 0)
+        if self.combo is not None:
+            self._draw_combo(surf)
         if self.flash > 0:
             layer = pygame.Surface(surf.get_size(), pygame.SRCALPHA)
             layer.fill((255, 255, 255, int(150 * self.flash / 8)))
             surf.blit(layer, (0, 0))
+
+    def _draw_combo(self, surf):
+        count, life, left = self.combo
+        x = 330 if left else settings.WIDTH - 330
+        y = 210
+        text = f"{count} VURUŞ!"
+        glyph = self._font_combo.render(text, True, (255, 226, 84))
+        shadow = self._font_combo.render(text, True, settings.BLACK)
+        if life > 40:  # giriSte küçükten büyüe zipla
+            s = 0.6 + 0.4 * (46 - life) / 6
+            glyph = pygame.transform.rotozoom(glyph, 0, s)
+            shadow = pygame.transform.rotozoom(shadow, 0, s)
+        alpha = int(255 * min(1.0, life / 12))
+        glyph.set_alpha(alpha)
+        shadow.set_alpha(alpha)
+        rect = glyph.get_rect(center=(int(x), y))
+        surf.blit(shadow, rect.move(3, 3))
+        surf.blit(glyph, rect)

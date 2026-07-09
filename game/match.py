@@ -9,7 +9,7 @@ from enum import Enum, auto
 
 import pygame
 
-from . import combat, effects, hud, renderer, settings
+from . import combat, effects, hud, renderer, settings, stages
 from .characters import CHARACTERS
 from .controller import AIController, HumanController, Inputs, DIFFICULTY_LABELS
 from .fighter import Fighter, State
@@ -39,9 +39,10 @@ class Match:
         self.banner_sub = ""
         self.paused = False
         self.hitstop = 0
+        self._prev_hitstun = [False, False]  # kombo düSme tespiti icin
         self.result: str | None = None  # 'menu' | 'quit' | 'rematch'
         self.hud = hud.HUD(self.p1, self.p2, difficulty_label)
-        self.renderer = renderer.Renderer(random.choice(list(settings.STAGES)))
+        self.renderer = renderer.Renderer(random.choice(stages.STAGE_NAMES))
         self.effects = effects.EffectSystem()
 
     # ------------------------------------------------------------------
@@ -92,6 +93,7 @@ class Match:
                 combat.push_apart(self.p1, self.p2)
                 self._spawn_hit_effects(hit_events)
                 self._spawn_movement_dust()
+                self._decay_combos()
                 self.timer_frames -= 1
                 self._check_round_end()
         elif self.phase == Phase.ROUND_OVER:
@@ -114,12 +116,22 @@ class Match:
         for ev in hit_events:
             self.effects.spawn_hit(ev.x, ev.y, ev.damage, blocked=ev.blocked,
                                    heavy=ev.heavy, ko=ev.ko)
+            if ev.combo >= 2 and not ev.blocked:
+                self.effects.spawn_combo(ev.combo, ev.attacker is self.p1)
             if ev.blocked:
                 self.hitstop = max(self.hitstop, effects.HITSTOP_BLOCK)
             elif ev.heavy or ev.ko:
                 self.hitstop = max(self.hitstop, effects.HITSTOP_HEAVY)
             else:
                 self.hitstop = max(self.hitstop, effects.HITSTOP_NORMAL)
+
+    def _decay_combos(self):
+        """Bir dovuscu hitstun'dan cikinca rakibinin kombosunu sifirla."""
+        for i, (f, other) in enumerate(((self.p1, self.p2), (self.p2, self.p1))):
+            now = f.state == State.HITSTUN
+            if self._prev_hitstun[i] and not now:
+                other.combo_count = 0
+            self._prev_hitstun[i] = now
 
     def _spawn_movement_dust(self):
         for f in (self.p1, self.p2):

@@ -6,14 +6,11 @@ poz cizilir. Oyun mantigi cizimden habersizdir.
 """
 
 import math
-import os
 
 import pygame
 
-from . import settings, sprites
+from . import settings, sprites, stages
 from .fighter import State
-
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 class Renderer:
@@ -26,83 +23,10 @@ class Renderer:
     # sahne
     # ------------------------------------------------------------------
     def draw_stage(self, surf: pygame.Surface):
+        # sahne cizimi game/stages.py'ye devredilir (Kenney arka planlari)
         if self._bg is None or self._bg.get_size() != surf.get_size():
-            self._bg = self._build_background(surf.get_size())
+            self._bg = stages.build_background(self._stage, surf.get_size())
         surf.blit(self._bg, (0, 0))
-
-    def _build_background(self, size) -> pygame.Surface:
-        img = self._load_stage_image(size)
-        if img is not None:
-            return img
-        return self._build_procedural_bg(size)
-
-    def _load_stage_image(self, size) -> pygame.Surface | None:
-        path = settings.STAGES.get(self._stage)
-        if not path:
-            return None
-        full = os.path.join(ROOT, *path.split("/"))
-        if not os.path.isfile(full):
-            return None
-        try:
-            w, h = size
-            src = pygame.image.load(full).convert()
-            scale = w / src.get_width()
-            scaled = pygame.transform.smoothscale(
-                src, (w, int(src.get_height() * scale)))
-            # cim/toprak ufkunu FLOOR_Y'ye hizala
-            offset_y = settings.FLOOR_Y - int(settings.STAGE_HORIZON * scale)
-            bg = pygame.Surface(size)
-            bg.fill((120, 66, 48))  # olasi alt bosluk icin toprak tonu
-            bg.blit(scaled, (0, offset_y))
-            # zemin cizgisi + zemine hafif koyulasma (dovuscular one ciksin)
-            shade = pygame.Surface((w, h - settings.FLOOR_Y), pygame.SRCALPHA)
-            shade.fill((0, 0, 0, 40))
-            bg.blit(shade, (0, settings.FLOOR_Y))
-            pygame.draw.line(bg, (60, 44, 34), (0, settings.FLOOR_Y),
-                             (w, settings.FLOOR_Y), 3)
-            return bg
-        except Exception as exc:
-            print(f"[stage] '{self._stage}' yuklenemedi: {exc}")
-            return None
-
-    def _build_procedural_bg(self, size) -> pygame.Surface:
-        w, h = size
-        bg = pygame.Surface(size)
-        # gokyuzu gradyani (aksam: mor -> turuncu)
-        top = (44, 34, 66)
-        bottom = (196, 118, 92)
-        for y in range(settings.FLOOR_Y):
-            t = y / settings.FLOOR_Y
-            color = tuple(int(a + (b - a) * t) for a, b in zip(top, bottom))
-            pygame.draw.line(bg, color, (0, y), (w, y))
-        pygame.draw.circle(bg, (255, 214, 150), (int(w * 0.5), int(settings.FLOOR_Y * 0.72)), 90)
-        pygame.draw.circle(bg, (255, 236, 190), (int(w * 0.5), int(settings.FLOOR_Y * 0.72)), 60)
-        far = (78, 62, 90)
-        near = (54, 44, 72)
-        self._silhouette(bg, far, base_y=settings.FLOOR_Y, peaks=7, height=180, seed=1, w=w)
-        self._silhouette(bg, near, base_y=settings.FLOOR_Y, peaks=11, height=120, seed=2, w=w)
-        floor = pygame.Rect(0, settings.FLOOR_Y, w, h - settings.FLOOR_Y)
-        pygame.draw.rect(bg, (46, 40, 40), floor)
-        for i in range(1, 7):
-            y = settings.FLOOR_Y + i * i * 3
-            if y < h:
-                shade = max(30, 70 - i * 6)
-                pygame.draw.line(bg, (shade, shade - 4, shade - 6), (0, y), (w, y), 2)
-        pygame.draw.line(bg, (150, 130, 110), (0, settings.FLOOR_Y),
-                         (w, settings.FLOOR_Y), 4)
-        return bg
-
-    @staticmethod
-    def _silhouette(surf, color, base_y, peaks, height, seed, w):
-        # deterministik zikzak silue (rastgelesiz, tekrarlanabilir)
-        pts = [(0, base_y)]
-        for i in range(peaks + 1):
-            x = int(w * i / peaks)
-            wob = ((i * 928371 + seed * 15731) % 100) / 100.0
-            y = base_y - int(height * (0.45 + 0.55 * wob))
-            pts.append((x, y))
-        pts.append((w, base_y))
-        pygame.draw.polygon(surf, color, pts)
 
     # ------------------------------------------------------------------
     # dovuscu
@@ -113,13 +37,33 @@ class Renderer:
         if animator is not None:
             frame = animator.frame_for(f)
             if frame is not None:
-                bob = int(math.sin(f.state_frame * 0.12) * 2) if f.state == State.IDLE else 0
-                rect = frame.get_rect(midbottom=(int(f.x + ox), int(f.y + oy + bob)))
+                dy = 0
+                if f.state == State.IDLE:
+                    dy = int(math.sin(f.state_frame * 0.12) * 2)
+                elif (f.state in (State.PUNCH, State.KICK) and f.attack is not None
+                      and not f.attack_airborne and f.attack.height_frac < 0.4):
+                    dy = int(f.data.height * 0.16)   # alcak/cömel saldiri: sprite'i indir
+                rect = frame.get_rect(midbottom=(int(f.x + ox), int(f.y + oy + dy)))
                 surf.blit(frame, rect)
                 if f.hit_flash:
                     self._flash_sprite(surf, frame, rect)
+                if f.blocking:
+                    self._draw_guard(surf, f, ox, oy)
                 return
         self._draw_procedural(surf, f, ox, oy)
+
+    def _draw_guard(self, surf, f, ox=0, oy=0):
+        gx = f.x + ox + f.facing * (f.data.width * 0.5 + 8)
+        low = f.state == State.CROUCH
+        gy = f.y + oy - f.data.height * (0.34 if low else 0.52)
+        rect = pygame.Rect(0, 0, 18, 60)
+        rect.center = (int(gx), int(gy))
+        shield = pygame.Surface(rect.size, pygame.SRCALPHA)
+        a = 200 if f.block_flash else 110
+        pygame.draw.ellipse(shield, (150, 200, 255, a), shield.get_rect())
+        pygame.draw.ellipse(shield, (210, 235, 255, min(255, a + 90)),
+                            shield.get_rect(), 3)
+        surf.blit(shield, rect)
 
     def _animator_for(self, f):
         key = f.data.key
@@ -162,7 +106,7 @@ class Renderer:
             return
 
         bob = math.sin(f.state_frame * 0.28) * 3 if f.state == State.WALK else 0
-        crouch = h * 0.07 if f.state == State.BLOCK else 0
+        crouch = h * 0.30 if f.state == State.CROUCH else 0
         tuck = h * 0.16 if f.state == State.JUMP else 0
         lean = -fc * 7 if f.state == State.HITSTUN else 0
         eff_h = h - crouch - tuck
@@ -198,7 +142,7 @@ class Renderer:
                 limb.midright = (int(front + 4), arm_y)
             limb_color = settings.SKIN if f.state == State.PUNCH else dark
             pygame.draw.rect(surf, limb_color, limb, border_radius=6)
-        elif f.state == State.BLOCK:
+        elif f.blocking:
             guard = pygame.Rect(0, 0, 14, int(eff_h * 0.42))
             gx = x + fc * (w / 2 + 8)
             guard.center = (int(gx), int(y - eff_h * 0.55))

@@ -22,17 +22,39 @@ py main.py
 |-----|-------|
 | A / D | Yürü (geri / ileri) |
 | W | Zıpla |
-| S | Blok (basılı tut) |
-| J | Yumruk (hızlı, az hasar) |
-| K | Tekme (yavaş, çok hasar, uzun menzil) |
+| S | Çömel |
+| J | Yumruk |
+| K | Tekme |
+| **geri tut** | Blok (rakibin tersine bas) |
 | ESC | Duraklat / devam (duraklatmada Q: ana menü) |
 
 Menüde ok tuşları / WASD ile karakterini, rakibini ve bot zorluğunu
 seç, ENTER ile başla. Maç sonu ENTER = tekrar, ESC = menü.
 
-Blok hasarın ~%85'ini keser (kalan "chip" hasarıdır). Yumruk/tekmenin
-startup → active → recovery kare pencereleri vardır: vuruş yalnızca
-active penceresinde isabet eder, recovery sırasında savunmasızsın.
+## Hareketler ve kombolar
+
+Saldırıların **startup → active → recovery** kare pencereleri vardır:
+vuruş yalnızca active penceresinde isabet eder, recovery sırasında
+savunmasızsın.
+
+- **Ayakta:** J yumruk, K tekme (yüksek — ayakta veya çömelerek bloklanır)
+- **Çömelerek (S + vuruş):** alçak yumruk; **S + K = süpürme** (alçak, rakibi
+  yere serer). Alçak saldırılar yalnızca **çömel-blok** ile kesilir.
+- **Havada (zıpla + vuruş):** overhead hava yumruğu/tekmesi. Overhead yalnızca
+  **ayakta blok** ile kesilir → yüksek/alçak ikilemi (mixup).
+- **Zincir kombo (magic series):** bir vuruş **isabet ederse** toparlanması
+  daha ağır bir vuruşa iptal edilebilir (yumruk → tekme/süpürme). Zıpla-vur
+  ile başlayıp yere inince yer vuruşuyla devam = jump-in kombo. Kombodaki
+  sonraki vuruşlar kademeli olarak daha az hasar verir (sonsuz kombo yok).
+
+**Blok:** rakibin tersine bastığın sürece bloklarsın; hasarın ~%85'ini keser
+(kalan "chip"). Doğru yükseklikte bloklamak şart: alçağı çömelerek, overhead'i
+ayakta.
+
+## Efektler
+
+Vuruşlarda: kıvılcım, yükselen hasar sayısı, ekran sarsıntısı, **isabet
+donması** (hitstop), kombo sayacı ("N VURUŞ!") ve KO'da tam ekran flaş.
 
 ## Karakterler
 
@@ -60,10 +82,16 @@ game/
   hud.py           can barları, süre, pankartlar
   renderer.py      TEK çizim kapısı: sprite varsa Kenney pozu, yoksa prosedürel
   sprites.py       Kenney poz-başına PNG yükleyici + animasyon seçimi
+  stages.py        10 sahne (Kenney arka planları): tam görsel + kompoze paralaks
   menu.py          karakter / rakip / zorluk seçim ekranı (sprite önizlemeli)
 charac/            Kenney "Toon Characters" sprite paketi (CC0) — bkz. Krediler
-tests/smoke_test.py  pencere açmadan çalışan testler (py tests/smoke_test.py)
+backgroundpack/    Kenney "Background elements" paketi (CC0) — sahne görselleri
+tests/smoke_test.py  pencere açmadan çalışan testler (py tests/smoke_test.py, 25 test)
 ```
+
+Her maçta 10 sahneden biri rastgele gelir (orman/çayır/sonbahar/çöl + gündüz
+dağlar, gün batımı, gece, bulutlu ova, sisli orman, şato). Yeni sahne eklemek
+için `game/stages.py`'ye bir giriş yaz.
 
 Bot ile insan aynı `Inputs` yapısını üretir; **PvP** eklemek ikinci bir
 `HumanController`'a farklı tuş seti vermekten ibarettir. Oyun mantığı
@@ -89,8 +117,10 @@ güncellemen yeterli.
 
 ## Krediler
 
-Karakter görselleri: **Kenney — Toon Characters** (https://kenney.nl),
-**CC0** (kamu malı) lisansı. Tam lisans: `charac/License.txt`.
+Görseller: **Kenney** (https://kenney.nl), **CC0** (kamu malı) lisansı.
+- Karakterler: *Toon Characters* — `charac/License.txt`
+- Sahneler: *Background elements* — `backgroundpack/License.txt`
+
 Oyun kodu bu proje kapsamında yazılmıştır.
 
 ## Sonrası için fikirler

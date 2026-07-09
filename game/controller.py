@@ -19,7 +19,8 @@ class Inputs:
     jump: bool = False
     punch: bool = False
     kick: bool = False
-    block: bool = False
+    down: bool = False   # comelme (insan: S)
+    block: bool = False  # dogrudan blok (bot kullanir; insan GERI tutarak bloklar)
 
 
 class Controller:
@@ -34,7 +35,7 @@ P1_KEYS = {
     "left": pygame.K_a,
     "right": pygame.K_d,
     "jump": pygame.K_w,
-    "block": pygame.K_s,
+    "down": pygame.K_s,
     "punch": pygame.K_j,
     "kick": pygame.K_k,
 }
@@ -48,7 +49,8 @@ class HumanController(Controller):
         inp = Inputs()
         inp.move = ((1 if pressed[self.keys["right"]] else 0)
                     - (1 if pressed[self.keys["left"]] else 0))
-        inp.block = bool(pressed[self.keys["block"]])
+        inp.down = bool(pressed[self.keys["down"]])
+        # blok: rakibe göre GERI yönü tutmak (fighter cozer); ayri tuS yok
         for e in events:
             if e.type == pygame.KEYDOWN:
                 if e.key == self.keys["jump"]:
@@ -65,13 +67,17 @@ class HumanController(Controller):
 # ----------------------------------------------------------------------
 DIFFICULTIES = {
     # idle_prob: menzil disindayken bazen yaklasmayip bekleme ihtimali
-    # (yuksek = daha pasif, oyuncuya nefes payi = daha kolay)
+    # (yuksek = daha pasif, oyuncuya nefes payi = daha kolay).
+    # reaction: bloga gecme gecikmesi (kare). Saldiri startup'indan BUYUK
+    # olmali; kucukse blok vurus kutusu aktiflesmeden kalkar ve garanti
+    # (insanustu) negatiflenir. Denge olcumle dogrulandi: oyuncu kazanma
+    # kolay ~99% > orta ~44% > zor ~27% (monotonik, adil).
     "kolay": dict(decision_interval=32, reaction=26, aggression=0.16,
                   block_prob=0.05, jump_prob=0.03, retreat_prob=0.30, idle_prob=0.45),
-    "orta": dict(decision_interval=12, reaction=9, aggression=0.55,
-                 block_prob=0.40, jump_prob=0.08, retreat_prob=0.15, idle_prob=0.0),
-    "zor": dict(decision_interval=7, reaction=4, aggression=0.78,
-                block_prob=0.70, jump_prob=0.10, retreat_prob=0.08, idle_prob=0.0),
+    "orta": dict(decision_interval=16, reaction=18, aggression=0.42,
+                 block_prob=0.28, jump_prob=0.07, retreat_prob=0.16, idle_prob=0.05),
+    "zor": dict(decision_interval=14, reaction=12, aggression=0.55,
+                block_prob=0.48, jump_prob=0.10, retreat_prob=0.10, idle_prob=0.0),
 }
 DIFFICULTY_ORDER = ["kolay", "orta", "zor"]
 DIFFICULTY_LABELS = {"kolay": "Kolay", "orta": "Orta", "zor": "Zor"}

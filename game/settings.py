@@ -13,16 +13,8 @@ STAGE_MARGIN = 30       # dovusculerin ekran kenarina yaklasabilecegi sinir
 GRAVITY = 0.9           # px/kare^2
 GROUND_FRICTION = 0.82  # itilme hizinin yerde kare basina sonme carpani
 
-# Sahne arka planlari (Kenney background pack, CC0). Kaynak gorseller
-# 1024x1024; cim/toprak ufku ~y=815. Genislige olceklenip ufuk FLOOR_Y'ye
-# hizalanir. Gorsel yoksa prosedurel gokyuzu cizilir.
-STAGES = {
-    "orman": "backgroundpack/Backgrounds/backgroundColorForest.png",
-    "cayir": "backgroundpack/Backgrounds/backgroundColorGrass.png",
-    "sonbahar": "backgroundpack/Backgrounds/backgroundColorFall.png",
-    "col": "backgroundpack/Backgrounds/backgroundColorDesert.png",
-}
-STAGE_HORIZON = 815     # tam sahne gorselinde cim/toprak sinirinin kaynak-y'si
+# Sahne arka planlari game/stages.py'de tanimli (Kenney background pack, CC0);
+# match rastgele bir stages.STAGE_NAMES sahnesi secer.
 
 ROUND_TIME = 99         # saniye
 ROUNDS_TO_WIN = 2       # macı almak icin gereken round sayisi

@@ -121,8 +121,9 @@ class Menu:
 
         helps = [
             "ENTER: Başla      ESC: Çıkış      Ok tuşları / WASD: Seçim",
-            "Oyun içi: A/D yürü   W zıpla   S blok   J yumruk   K tekme   ESC duraklat",
+            "A/D yürü   W zıpla   S çömel   J yumruk   K tekme   (geri tut = blok)   ESC duraklat",
+            "Kombo: çömel+vuruş = alçak · zıpla+vuruş = overhead · isabette zincir (yumruk→tekme)",
         ]
         for i, h in enumerate(helps):
             t = self.font_help.render(h, True, settings.FLOOR_LINE)
-            surf.blit(t, t.get_rect(center=(cx, settings.HEIGHT - 70 + i * 28)))
+            surf.blit(t, t.get_rect(center=(cx, settings.HEIGHT - 82 + i * 26)))

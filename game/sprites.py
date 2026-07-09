@@ -26,14 +26,17 @@ STATE_POSES = {
     State.IDLE:    (["idle"], 1, False),
     State.WALK:    (["walk0", "walk1", "walk2", "walk3",
                     "walk4", "walk5", "walk6", "walk7"], 14, True),
+    State.CROUCH:  (["duck"], 1, False),
+    State.BLOCK:   (["hold"], 1, False),   # ayakta guard (kollar önde)
     State.JUMP:    (["jump"], 1, False),
-    State.BLOCK:   (["duck"], 1, False),
     State.HITSTUN: (["hit"], 1, False),
     State.KO:      (["hurt", "fallDown", "down"], 9, False),
     # PUNCH/KICK ozel: kareler saldirinin startup->recovery suresine yayilir
     State.PUNCH:   (["attack0", "attack1", "attack2"], 0, False),
     State.KICK:    (["attack1", "kick", "kick"], 0, False),
 }
+# yere serilince (supurme) gosterilecek pozlar
+KNOCKDOWN_POSES = ["hurt", "fallDown"]
 
 # Kenney pozlarinin gorunur govde yuksekligi ~ canvas'in bu orani kadar
 # (idle icerigi 96x128 canvasta y=33..128). Olcegi buna gore normalize
@@ -46,7 +49,10 @@ class Animator:
         self.poses = poses  # State -> (frames_right, frames_left, fps, loop)
 
     def frame_for(self, fighter) -> pygame.Surface | None:
-        entry = self.poses.get(fighter.state) or self.poses.get(State.IDLE)
+        state = fighter.state
+        if state == State.HITSTUN and getattr(fighter, "knocked_down", False):
+            state = State.KO   # yere serilme: KO (hurt/fallDown) pozlarini kullan
+        entry = self.poses.get(state) or self.poses.get(State.IDLE)
         if entry is None:
             return None
         right, left, fps, loop = entry

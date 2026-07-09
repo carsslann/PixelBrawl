@@ -10,6 +10,7 @@ Bir karaktere sprite baglamak icin SpriteRef ver (folder + prefix).
 sprites.py bu referansla pozlari yukler; yuklenemezse prosedurel cizim.
 """
 
+import dataclasses
 from dataclasses import dataclass
 
 
@@ -32,6 +33,10 @@ class AttackData:
     hit_w: int        # vurus kutusunun govde onunden uzanma mesafesi/genisligi
     hit_h: int        # vurus kutusu yuksekligi
     height_frac: float  # vurusun yerden yuksekligi (boy orani, 0=ayak 1=tepe)
+    guard: str = "high"     # "high"=her blok, "low"=sadece cömel-blok, "overhead"=sadece ayakta blok
+    knockdown: bool = False  # isabet rakibi yere serer (uzun hitstun)
+    chain: int = 1          # zincir kademesi; kanser sadece daha yuksek kademeye
+    airborne: bool = False  # havada yapilan saldiri (hava fizigi uygulanir)
 
     @property
     def total(self) -> int:
@@ -53,14 +58,44 @@ class CharacterData:
     kick: AttackData
     sprite: SpriteRef | None = None
 
+    # --- turetilmis saldirilar (comelme / hava) --------------------------
+    # Temel yumruk/tekmeden hesaplanir; ayri veri tutmaya gerek yok.
+    @property
+    def crouch_punch(self) -> AttackData:
+        return dataclasses.replace(
+            self.punch, name="alçak yumruk", height_frac=0.30,
+            recovery=max(6, self.punch.recovery - 2), guard="high", chain=1)
+
+    @property
+    def sweep(self) -> AttackData:  # comel + tekme = supurme (yere serer)
+        return dataclasses.replace(
+            self.kick, name="süpürme", height_frac=0.14,
+            hit_w=self.kick.hit_w + 8, knockback=self.kick.knockback * 0.6,
+            recovery=self.kick.recovery + 4, guard="low", knockdown=True, chain=2)
+
+    @property
+    def jump_punch(self) -> AttackData:
+        # hava saldirilari: uzun/genis vurus kutusu, inis boyunca aktif kalir
+        # (jump-in); overhead -> yalnizca ayakta blok keser.
+        return dataclasses.replace(
+            self.punch, name="hava yumruk", height_frac=0.50,
+            hit_h=self.punch.hit_h + 42, guard="overhead", airborne=True, chain=1)
+
+    @property
+    def jump_kick(self) -> AttackData:
+        return dataclasses.replace(
+            self.kick, name="hava tekme", height_frac=0.48,
+            hit_w=self.kick.hit_w + 6, hit_h=self.kick.hit_h + 42,
+            guard="overhead", airborne=True, chain=2)
+
 
 # Arketip sablonlari (denge kolay tutulsun diye saldirilar paylasilir) ----
 def _punch(dmg, su, act, rec, hs, kb, w, h):
-    return AttackData("yumruk", dmg, su, act, rec, hs, kb, w, h, 0.74)
+    return AttackData("yumruk", dmg, su, act, rec, hs, kb, w, h, 0.74, chain=1)
 
 
 def _kick(dmg, su, act, rec, hs, kb, w, h):
-    return AttackData("tekme", dmg, su, act, rec, hs, kb, w, h, 0.46)
+    return AttackData("tekme", dmg, su, act, rec, hs, kb, w, h, 0.46, chain=2)
 
 
 CHARACTERS = {
