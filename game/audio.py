@@ -598,6 +598,30 @@ def is_enabled():
     return _enabled and _mixer_ready
 
 
+# genel ses seviyeleri (ayarlar ekranindan degistirilir, 0..1)
+_sfx_vol = 1.0
+_music_vol = 1.0
+
+
+def set_sfx_volume(v):
+    global _sfx_vol
+    _sfx_vol = 0.0 if v < 0.0 else (1.0 if v > 1.0 else float(v))
+
+
+def set_music_volume(v):
+    global _music_vol
+    _music_vol = 0.0 if v < 0.0 else (1.0 if v > 1.0 else float(v))
+    if _enabled and _mixer_ready:
+        try:
+            pygame.mixer.music.set_volume(_music_vol)
+        except Exception:
+            pass
+
+
+def get_volumes():
+    return _sfx_vol, _music_vol
+
+
 def play(name, vol=1.0):
     """Tek sesi calar. Bilinmeyen isim veya devre disi = no-op (crash yok)."""
     if not _enabled or not _mixer_ready:
@@ -611,7 +635,7 @@ def play(name, vol=1.0):
             return
     try:
         v = 0.0 if vol < 0.0 else (1.0 if vol > 1.0 else float(vol))
-        snd.set_volume(v)
+        snd.set_volume(v * _sfx_vol)
         snd.play()
     except Exception:
         pass  # calma sirasindaki hata oyunu dusurmesin
@@ -624,7 +648,7 @@ def play_music(vol=0.5, loops=-1):
     try:
         pygame.mixer.music.load(_music_path)
         v = 0.0 if vol < 0.0 else (1.0 if vol > 1.0 else float(vol))
-        pygame.mixer.music.set_volume(v)
+        pygame.mixer.music.set_volume(v * _music_vol)
         pygame.mixer.music.play(loops)
     except Exception:
         pass

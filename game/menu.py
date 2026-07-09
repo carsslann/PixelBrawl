@@ -6,6 +6,7 @@ from . import audio, screens, settings, sprites
 from .characters import CHARACTERS, CHARACTER_ORDER
 from .controller import DIFFICULTY_LABELS, DIFFICULTY_ORDER
 from .hud import load_font
+from .settings_screen import settings_screen
 
 MODES = ["pve", "pvp", "arcade"]
 MODE_LABELS = {"pve": "Tek Kişi (Bot)", "pvp": "2 Kişi (PvP)", "arcade": "Arcade"}
@@ -55,6 +56,10 @@ class Menu:
                                 screen, clock,
                                 CHARACTER_ORDER[self.p1_idx]) == "quit":
                             return None
+                    if e.key == pygame.K_o:   # ayarlar
+                        if settings_screen(screen, clock) == "quit":
+                            return None
+                        screen = pygame.display.get_surface()
                     if e.key in (pygame.K_UP, pygame.K_w):
                         self.selected_row = (self.selected_row - 1) % len(self.rows)
                         audio.play("menu_move")
@@ -140,7 +145,7 @@ class Menu:
                                    (x, body.top - data.width // 4), data.width // 3)
 
         helps = [
-            "ENTER: Başla    ESC: Çıkış    H: Hareket listesi    Ok/WASD: Seçim",
+            "ENTER: Başla   ESC: Çıkış   H: Hareketler   O: Ayarlar   Ok/WASD: Seçim",
             "A/D yürü   W zıpla   S çömel   J yumruk   K tekme   (geri tut = blok)   ESC duraklat",
             "Kombo: çömel+vuruş = alçak · zıpla+vuruş = overhead · isabette zincir (yumruk→tekme)",
         ]

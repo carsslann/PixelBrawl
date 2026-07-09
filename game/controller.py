@@ -165,6 +165,26 @@ class AIController(Controller):
 
         gap = abs(opp.x - me.x) - (me.data.width + opp.data.width) / 2
         toward = 1 if opp.x >= me.x else -1
+        agg = self.p["aggression"]
+
+        # C16 anti-air: rakip havadayken yakinsa dusur (silah anti-air ya da tekme)
+        if (opp.state == State.JUMP and gap < 150 and me.on_ground
+                and me.state in (State.IDLE, State.WALK)
+                and random.random() < agg * 0.10):
+            if (me.data.weapon is not None and me.data.weapon.anti_air
+                    and me.meter >= me.data.weapon.meter_cost):
+                inp.weapon = True
+            else:
+                inp.kick = True
+            return inp
+        # C16 whiff punish: rakip bosa vurup toparlaniyorsa cezalandir
+        if (opp.state in (State.PUNCH, State.KICK) and opp.attack is not None
+                and not opp.attack_has_hit
+                and opp.state_frame >= opp.attack.startup + opp.attack.active
+                and gap < 120 and me.state in (State.IDLE, State.WALK)
+                and random.random() < agg * 0.14):
+            inp.kick = True
+            return inp
 
         # metre doluysa ara sira ozel ates (uzak-orta mesafe, bloklanabilir)
         if (me.data.special is not None and me.meter >= me.data.special.meter_cost

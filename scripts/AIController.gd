@@ -79,5 +79,13 @@ func get_inputs(me: Fighter, opp: Fighter) -> Inputs:
 		want_attack = ""
 		move = 0
 
+	# ozel ates: metre dolu + orta mesafe -> ara sira firlat
+	if me.data.special != null and me.meter >= me.data.special.meter_cost \
+			and (me.state == Fighter.State.IDLE or me.state == Fighter.State.WALK) \
+			and gap > 120 and randf() < 0.03:
+		inp.special = true
+		inp.move = 0
+		return inp
+
 	inp.move = move
 	return inp

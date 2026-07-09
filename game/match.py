@@ -27,6 +27,15 @@ AMBIENT_BY_STAGE = {
     "gece_dorukleri": "none", "sato_alacakaranlik": "none",
 }
 
+# sahneye gore isik tonu (renk grade, dusuk alfa) — B10
+STAGE_TINT = {
+    "orman": (60, 120, 50, 20), "cayir": (90, 150, 60, 16),
+    "sonbahar": (215, 120, 40, 26), "col": (235, 185, 95, 24),
+    "daglar_gunduz": (150, 180, 225, 14), "tepeler_gunbatimi": (240, 120, 55, 34),
+    "gece_dorukleri": (35, 45, 110, 48), "bulutlu_ova": (190, 205, 225, 16),
+    "sisli_orman": (210, 160, 175, 30), "sato_alacakaranlik": (120, 85, 165, 34),
+}
+
 
 class Phase(Enum):
     INTRO = auto()
@@ -53,12 +62,22 @@ class Match:
         self._prev_hitstun = [False, False]  # kombo düSme tespiti icin
         self._prev_attacking = [False, False]  # whoosh sesi icin
         self.cam_x = 0.0                     # parallax kamera salinimi
+        self.zoom = 1.0                      # kamera zoom (>=1: yakinlas)
+        self.cam_center_x = settings.WIDTH / 2
+        self._cam_center_y = 470             # zoom merkezi (aksiyon yuksekligi)
+        self._world = pygame.Surface((settings.WIDTH, settings.HEIGHT))
         self.result: str | None = None  # 'menu' | 'quit' | 'rematch'
         self.hud = hud.HUD(self.p1, self.p2, difficulty_label)
         self.stage = random.choice(stages.STAGE_NAMES)
         self.renderer = renderer.Renderer(self.stage)
         self.effects = effects.EffectSystem()
         self.effects.set_ambient(AMBIENT_BY_STAGE.get(self.stage, "leaves"))
+        tint = STAGE_TINT.get(self.stage)    # sahne isik tonu (B10)
+        if tint:
+            self._tint = pygame.Surface((settings.WIDTH, settings.HEIGHT), pygame.SRCALPHA)
+            self._tint.fill(tint)
+        else:
+            self._tint = None
         self.projectiles = []                # ucan ozel ates mermileri
 
     # ------------------------------------------------------------------
@@ -300,27 +319,52 @@ class Match:
         self.phase_frame = 0
 
     # ------------------------------------------------------------------
+    def _update_camera(self):
+        mid = (self.p1.x + self.p2.x) / 2
+        target_x = max(-80.0, min(80.0, (mid - settings.WIDTH / 2) * 0.25))
+        self.cam_x += (target_x - self.cam_x) * 0.12
+        self.cam_center_x = mid
+        if self.phase == Phase.INTRO:          # acilis: yavas zoom-out
+            t = self.phase_frame / max(1, settings.INTRO_FRAMES)
+            target_zoom = 1.30 - 0.30 * min(1.0, t * 1.5)
+        else:                                  # dinamik: yakinken hafif yaklas
+            gap = abs(self.p1.x - self.p2.x)
+            target_zoom = 1.0 + 0.16 * (1.0 - min(1.0, gap / 640.0))
+        self.zoom += (target_zoom - self.zoom) * 0.10
+
+    def _blit_zoomed(self, surf, world):
+        z = self.zoom
+        w, h = settings.WIDTH, settings.HEIGHT
+        if z <= 1.004:
+            surf.blit(world, (0, 0))
+            return
+        sw, sh = int(w * z), int(h * z)
+        scaled = pygame.transform.smoothscale(world, (sw, sh))
+        srcx = max(0, min(sw - w, int(self.cam_center_x * z - w / 2)))
+        srcy = max(0, min(sh - h, int(self._cam_center_y * z - h / 2)))
+        surf.blit(scaled, (0, 0), pygame.Rect(srcx, srcy, w, h))
+
     def draw(self, surf):
-        # parallax kamera salinimi: dovusculerin ortalamasi merkezden kayinca
-        # arka katmanlar derinliklerine gore kayar (yumusatilmis takip)
-        target = max(-80.0, min(80.0,
-                     ((self.p1.x + self.p2.x) / 2 - settings.WIDTH / 2) * 0.25))
-        self.cam_x += (target - self.cam_x) * 0.12
-        self.renderer.draw_stage(surf, self.cam_x)
-        ox, oy = self.effects.shake_offset()  # ekran sarsintisi (dunya katmani)
+        self._update_camera()
+        world = self._world                    # dunya (zoom'a dahil) ara yuzeye cizilir
+        self.renderer.draw_stage(world, self.cam_x)
+        ox, oy = self.effects.shake_offset()   # ekran sarsintisi
         # KO olan altta kalsin diye once onu ciz
         order = sorted((self.p1, self.p2), key=lambda f: f.state == State.KO, reverse=True)
         for f in order:
-            self.renderer.draw_fighter(surf, f, ox, oy)
+            self.renderer.draw_fighter(world, f, ox, oy)
         for f in (self.p1, self.p2):           # silah hilali dovusculerin ustunde
             if f.state == State.WEAPON:
-                self.renderer.draw_weapon_arc(surf, f, ox, oy)
-        self.effects.draw_world(surf, ox, oy)  # kivilcim/toz (sarsintiya dahil)
-        for proj in self.projectiles:          # ucan mermiler
-            proj.draw(surf, ox, oy)
-        self.renderer.draw_foreground(surf, self.cam_x)  # on plan (dovusculerin ONUNDE)
+                self.renderer.draw_weapon_arc(world, f, ox, oy)
+        self.effects.draw_world(world, ox, oy)  # kivilcim/toz
+        for proj in self.projectiles:           # ucan mermiler
+            proj.draw(world, ox, oy)
+        self.renderer.draw_foreground(world, self.cam_x)  # on plan
+        if self._tint is not None:              # sahne isik tonu (B10)
+            world.blit(self._tint, (0, 0))
+        self._blit_zoomed(surf, world)          # zoom uygulayarak ekrana bas
         seconds = -(-self.timer_frames // settings.FPS)  # ceil
-        self.hud.draw(surf, seconds, self.wins, self.round_num)
+        self.hud.draw(surf, seconds, self.wins, self.round_num)  # HUD zoom'suz
         self.effects.draw_overlay(surf)  # hasar sayilari + KO flash (sarsintisiz)
 
         if self.phase == Phase.INTRO:

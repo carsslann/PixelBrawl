@@ -345,6 +345,31 @@ def test_character_moves_data():
         assert len(moves) >= 8 and len(combos) >= 1, f"{key} hareket verisi eksik"
 
 
+def test_hud_portraits():
+    m = Match(A, B, AIController("orta"), AIController("orta"), "Orta")
+    assert len(m.hud.portraits) == 2
+    assert all(p.get_width() > 0 for p in m.hud.portraits)
+
+
+def test_camera_zoom_dynamic():
+    m = Match(A, B, AIController("orta"), AIController("orta"), "Orta")
+    m.phase = Phase.FIGHT
+    m.p1.x, m.p2.x = 600, 664          # yakin
+    for _ in range(40):
+        m._update_camera()
+    close_zoom = m.zoom
+    m.p1.x, m.p2.x = 120, 1160         # uzak
+    for _ in range(40):
+        m._update_camera()
+    assert close_zoom > m.zoom + 0.05, "yakinken uzaktakinden daha cok zoom olmali"
+
+
+def test_config_defaults():
+    from game import config
+    d = config.defaults()
+    assert "sfx_vol" in d and "music_vol" in d and "p1_keys" in d
+
+
 # ---------------------------------------------------------------- round akisi
 def test_ko_and_round_flow():
     m = Match(A, B, AIController("orta"), AIController("orta"), "Orta")

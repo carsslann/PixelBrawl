@@ -32,8 +32,11 @@ py main.py
 | ESC | Duraklat / devam (duraklatmada Q: ana menü) |
 
 Menüde ok tuşları / WASD ile **mod**, karakter, rakip ve zorluğu seç,
-ENTER ile başla. **H** ile seçili karakterin hareket listesini gör.
-Maç sonu ENTER = tekrar, ESC = menü.
+ENTER ile başla. **H** hareket listesi, **O** ayarlar (ses / tam ekran /
+tuş atama). Maç sonu ENTER = tekrar, ESC = menü.
+
+Ayrıca: kamera yakın dövüşte hafif **zoom** yapar, sahneye göre **ışık
+tonu** değişir, HUD'da karakter **portreleri** görünür.
 
 ## Modlar
 
@@ -122,6 +125,9 @@ game/
   stages.py        10 sahne + PARALLAX (Scene: derinlikli katmanlar, kamera salınımı)
   projectile.py    uçan mermi (özel ateş) sınıfı + make_fireball fabrikası
   fx_sprites.py    atesefekt sheet yükleyici (renk başına ateş topu / patlama)
+  screens.py       hareket listesi + arcade pankart ekranları
+  settings_screen.py  ayarlar ekranı (ses / tam ekran / tuş atama)
+  config.py        ayar kalıcılığı (assets/config.json)
   menu.py          karakter / rakip / zorluk seçim ekranı (sprite önizlemeli)
 charac/            Kenney "Toon Characters" sprite paketi (CC0) — bkz. Krediler
 backgroundpack/    Kenney "Background elements" paketi (CC0) — sahne görselleri
