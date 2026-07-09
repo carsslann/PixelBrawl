@@ -6,6 +6,7 @@ poz cizilir. Oyun mantigi cizimden habersizdir.
 """
 
 import math
+from collections import deque
 
 import pygame
 
@@ -15,18 +16,27 @@ from .fighter import State
 
 class Renderer:
     def __init__(self, stage: str = "orman"):
-        self._bg: pygame.Surface | None = None
+        self._scene = None        # stages.Scene (parallax katmanlar)
         self._stage = stage
         self._animators: dict = {}
+        self._trails: dict = {}   # id(fighter) -> son karelerin izleri (afterimage)
 
     # ------------------------------------------------------------------
     # sahne
     # ------------------------------------------------------------------
-    def draw_stage(self, surf: pygame.Surface):
-        # sahne cizimi game/stages.py'ye devredilir (Kenney arka planlari)
-        if self._bg is None or self._bg.get_size() != surf.get_size():
-            self._bg = stages.build_background(self._stage, surf.get_size())
-        surf.blit(self._bg, (0, 0))
+    def _ensure_scene(self, size):
+        if self._scene is None:
+            self._scene = stages.build_scene(self._stage, size)
+
+    def draw_stage(self, surf: pygame.Surface, cam_x: float = 0.0):
+        # arka katmanlar (gokyuzu..zemin), dovusculerDEN ONCE — parallax kaydirma
+        self._ensure_scene(surf.get_size())
+        self._scene.draw(surf, cam_x, "back")
+
+    def draw_foreground(self, surf: pygame.Surface, cam_x: float = 0.0):
+        # on plan cerceveleme (cali/agac), dovusculerDEN SONRA
+        self._ensure_scene(surf.get_size())
+        self._scene.draw(surf, cam_x, "front")
 
     # ------------------------------------------------------------------
     # dovuscu
@@ -44,6 +54,16 @@ class Renderer:
                       and not f.attack_airborne and f.attack.height_frac < 0.4):
                     dy = int(f.data.height * 0.16)   # alcak/cömel saldiri: sprite'i indir
                 rect = frame.get_rect(midbottom=(int(f.x + ox), int(f.y + oy + dy)))
+                # hareket izi (afterimage): hizli hareket veya saldiri aninda
+                trail = self._trails.setdefault(id(f), deque(maxlen=4))
+                if abs(f.vx) > 7 or f.state in (State.PUNCH, State.KICK):
+                    for i, (gf, gr) in enumerate(trail):
+                        ghost = gf.copy()
+                        ghost.set_alpha(26 + i * 22)
+                        surf.blit(ghost, gr)
+                    trail.append((frame, rect.copy()))
+                else:
+                    trail.clear()
                 surf.blit(frame, rect)
                 if f.hit_flash:
                     self._flash_sprite(surf, frame, rect)

@@ -62,6 +62,7 @@ class Fighter:
         self.on_ground = True
         self.blocking = False
         self.knocked_down = False
+        self.victory = False    # mac sonu kazanan sevinme pozu
         self.combo_count = 0    # bu dovuscunun SALDIRAN olarak surdurdugu kombo
         # yalnizca gorsel katmanin kullandigi sayaclar/olaylar
         self.hit_flash = 0

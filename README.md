@@ -51,10 +51,20 @@ savunmasızsın.
 (kalan "chip"). Doğru yükseklikte bloklamak şart: alçağı çömelerek, overhead'i
 ayakta.
 
-## Efektler
+## His & görsel (efektler, ses, kamera)
 
-Vuruşlarda: kıvılcım, yükselen hasar sayısı, ekran sarsıntısı, **isabet
-donması** (hitstop), kombo sayacı ("N VURUŞ!") ve KO'da tam ekran flaş.
+- **Parallax sahneler:** her sahne derinlikli katmanlardan oluşur (uzak dağ →
+  tepe → zemin → ön plan çalı/ağaç); dövüşçüler kenara yüklendikçe kamera hafif
+  salınır, katmanlar farklı hızda kayar → derinlik. Ön plan öğeleri dövüşçüleri
+  önden çerçeveler.
+- **Ses** (`audio.py`): tüm sesler kodla sentezlenir (harici dosya yok) —
+  yumruk/tekme, blok "tınk", KO gong, zıpla/in, whoosh, menü, düşük sesli müzik.
+- **Vuruş efektleri:** kıvılcım, yükselen hasar sayısı, **impact ring** (ağır
+  vuruşta radyal halka), ekran sarsıntısı, **isabet donması** (hitstop), kombo
+  sayacı ("N VURUŞ!"), KO'da tam ekran flaş + **slow-mo + vinyet**.
+- **Atmosfer:** sahneye göre süzülen ortam partikülleri (yaprak/toz/kor).
+- **Hareket izi** (afterimage) hızlı hareket ve saldırılarda; **kazanma pozu**
+  (maç sonu kazanan sevinir); round başı **VS açılışı**.
 
 ## Karakterler
 
@@ -77,12 +87,13 @@ game/
   fighter.py       durum makinesi + fizik (çizimden tamamen bağımsız)
   controller.py    Inputs; HumanController (klavye) + AIController (bot, 3 zorluk)
   combat.py        vuruş çözümü (hitbox/hurtbox), gövde itişme, isabet olayları
-  match.py         round/maç akışı, süre, KO, efekt + hitstop + sarsıntı tetikleme
-  effects.py       kıvılcım / hasar sayısı / toz / ekran sarsıntısı / KO flaşı
-  hud.py           can barları, süre, pankartlar
-  renderer.py      TEK çizim kapısı: sprite varsa Kenney pozu, yoksa prosedürel
-  sprites.py       Kenney poz-başına PNG yükleyici + animasyon seçimi
-  stages.py        10 sahne (Kenney arka planları): tam görsel + kompoze paralaks
+  match.py         round/maç akışı, süre, KO, efekt/ses/kamera tetikleme
+  effects.py       kıvılcım/hasar sayısı/toz/sarsıntı/KO flaşı/impact ring/ambient/vinyet
+  audio.py         prosedürel ses sentezi (pygame.mixer, harici dosya yok)
+  hud.py           can barları, süre, pankartlar, VS açılışı
+  renderer.py      TEK çizim kapısı: sprite + hareket izi; sahne parallax'ı stages'e devreder
+  sprites.py       Kenney poz-başına PNG yükleyici + animasyon (kazanma cheer dahil)
+  stages.py        10 sahne + PARALLAX (Scene: derinlikli katmanlar, kamera salınımı)
   menu.py          karakter / rakip / zorluk seçim ekranı (sprite önizlemeli)
 charac/            Kenney "Toon Characters" sprite paketi (CC0) — bkz. Krediler
 backgroundpack/    Kenney "Background elements" paketi (CC0) — sahne görselleri

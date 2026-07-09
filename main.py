@@ -5,7 +5,7 @@ Baslatmak icin: run.bat  (veya: py main.py)
 
 import pygame
 
-from game import match, settings
+from game import audio, match, settings
 from game.menu import Menu
 
 
@@ -14,6 +14,8 @@ def main():
     screen = pygame.display.set_mode((settings.WIDTH, settings.HEIGHT))
     pygame.display.set_caption("Sokak Kavgacısı")
     clock = pygame.time.Clock()
+    audio.init()
+    audio.play_music(vol=0.3)
 
     while True:
         selection = Menu().run(screen, clock)

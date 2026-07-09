@@ -9,13 +9,21 @@ from enum import Enum, auto
 
 import pygame
 
-from . import combat, effects, hud, renderer, settings, stages
+from . import audio, combat, effects, hud, renderer, settings, stages
 from .characters import CHARACTERS
 from .controller import AIController, HumanController, Inputs, DIFFICULTY_LABELS
 from .fighter import Fighter, State
 
 P1_START_X = settings.WIDTH * 0.32
 P2_START_X = settings.WIDTH * 0.68
+
+# sahneye gore ortam partikulu (atmosfer)
+AMBIENT_BY_STAGE = {
+    "orman": "leaves", "cayir": "leaves", "sonbahar": "leaves",
+    "sisli_orman": "leaves", "bulutlu_ova": "leaves", "daglar_gunduz": "leaves",
+    "col": "dust", "tepeler_gunbatimi": "embers",
+    "gece_dorukleri": "none", "sato_alacakaranlik": "none",
+}
 
 
 class Phase(Enum):
@@ -39,11 +47,16 @@ class Match:
         self.banner_sub = ""
         self.paused = False
         self.hitstop = 0
+        self.slowmo = 0                      # KO slow-mo sayaci
         self._prev_hitstun = [False, False]  # kombo düSme tespiti icin
+        self._prev_attacking = [False, False]  # whoosh sesi icin
+        self.cam_x = 0.0                     # parallax kamera salinimi
         self.result: str | None = None  # 'menu' | 'quit' | 'rematch'
         self.hud = hud.HUD(self.p1, self.p2, difficulty_label)
-        self.renderer = renderer.Renderer(random.choice(stages.STAGE_NAMES))
+        self.stage = random.choice(stages.STAGE_NAMES)
+        self.renderer = renderer.Renderer(self.stage)
         self.effects = effects.EffectSystem()
+        self.effects.set_ambient(AMBIENT_BY_STAGE.get(self.stage, "leaves"))
 
     # ------------------------------------------------------------------
     def start_round(self):
@@ -89,6 +102,7 @@ class Match:
                 i2 = self.c2.get_inputs(self.p2, self.p1, pressed, events)
                 self.p1.update(i1, self.p2)
                 self.p2.update(i2, self.p1)
+                self._whoosh_check()
                 hit_events = combat.resolve_hits(self.p1, self.p2)
                 combat.push_apart(self.p1, self.p2)
                 self._spawn_hit_effects(hit_events)
@@ -97,18 +111,33 @@ class Match:
                 self.timer_frames -= 1
                 self._check_round_end()
         elif self.phase == Phase.ROUND_OVER:
-            # kazanan/kaybeden fizigi islemeye devam etsin (KO dususu vs.)
-            self.p1.update(Inputs(), self.p2)
-            self.p2.update(Inputs(), self.p1)
-            self._spawn_movement_dust()
+            # kazanan/kaybeden fizigi islemeye devam etsin (KO dususu vs.);
+            # KO'dan hemen sonra slow-mo (her 3 karede 1 ilerle)
+            if self.slowmo > 0:
+                self.slowmo -= 1
+                if self.slowmo % 3 == 0:
+                    self.p1.update(Inputs(), self.p2)
+                    self.p2.update(Inputs(), self.p1)
+                    self._spawn_movement_dust()
+                if self.slowmo == 0:
+                    self.effects.set_slowmo_vignette(False)
+            else:
+                self.p1.update(Inputs(), self.p2)
+                self.p2.update(Inputs(), self.p1)
+                self._spawn_movement_dust()
             if self.phase_frame >= settings.ROUND_OVER_FRAMES:
                 if max(self.wins) >= settings.ROUNDS_TO_WIN:
                     self.phase = Phase.MATCH_OVER
                     self.phase_frame = 0
+                    winner = self.p1 if self.wins[0] > self.wins[1] else self.p2
+                    winner.victory = True
                 else:
                     self.round_num += 1
                     self.start_round()
-        # MATCH_OVER: yalnizca tus bekler
+        elif self.phase == Phase.MATCH_OVER:
+            # kazanan sevinme pozunda, kaybeden yerde — animasyonlar ilerlesin
+            self.p1.update(Inputs(), self.p2)
+            self.p2.update(Inputs(), self.p1)
         self.hud.update()
         self.effects.update()
 
@@ -119,11 +148,23 @@ class Match:
             if ev.combo >= 2 and not ev.blocked:
                 self.effects.spawn_combo(ev.combo, ev.attacker is self.p1)
             if ev.blocked:
+                audio.play("block")
                 self.hitstop = max(self.hitstop, effects.HITSTOP_BLOCK)
             elif ev.heavy or ev.ko:
+                self.effects.spawn_impact_ring(ev.x, ev.y, big=True)
+                audio.play("hit_heavy")
                 self.hitstop = max(self.hitstop, effects.HITSTOP_HEAVY)
             else:
+                self.effects.spawn_impact_ring(ev.x, ev.y)
+                audio.play("hit_light")
                 self.hitstop = max(self.hitstop, effects.HITSTOP_NORMAL)
+
+    def _whoosh_check(self):
+        for i, f in enumerate((self.p1, self.p2)):
+            atk = f.state in (State.PUNCH, State.KICK)
+            if atk and not self._prev_attacking[i]:
+                audio.play("whoosh", 0.6)
+            self._prev_attacking[i] = atk
 
     def _decay_combos(self):
         """Bir dovuscu hitstun'dan cikinca rakibinin kombosunu sifirla."""
@@ -138,12 +179,21 @@ class Match:
             if f.just_jumped:
                 d = 1 if f.vx > 0.5 else -1 if f.vx < -0.5 else 0
                 self.effects.spawn_dust(f.x, settings.FLOOR_Y, direction=d)
+                audio.play("jump", 0.7)
             if f.just_landed:
                 self.effects.spawn_dust(f.x, settings.FLOOR_Y)
+                audio.play("land", 0.6)
+
+    def _start_ko_slowmo(self):
+        self.slowmo = 48
+        audio.play("ko")
+        self.effects.set_slowmo_vignette(True)
 
     def _check_round_end(self):
         ko1 = self.p1.state == State.KO
         ko2 = self.p2.state == State.KO
+        if ko1 or ko2:
+            self._start_ko_slowmo()
         if ko1 and ko2:
             self._end_round(None, "ÇİFT NAKAVT!")
         elif ko1:
@@ -172,20 +222,27 @@ class Match:
 
     # ------------------------------------------------------------------
     def draw(self, surf):
-        self.renderer.draw_stage(surf)
+        # parallax kamera salinimi: dovusculerin ortalamasi merkezden kayinca
+        # arka katmanlar derinliklerine gore kayar (yumusatilmis takip)
+        target = max(-80.0, min(80.0,
+                     ((self.p1.x + self.p2.x) / 2 - settings.WIDTH / 2) * 0.25))
+        self.cam_x += (target - self.cam_x) * 0.12
+        self.renderer.draw_stage(surf, self.cam_x)
         ox, oy = self.effects.shake_offset()  # ekran sarsintisi (dunya katmani)
         # KO olan altta kalsin diye once onu ciz
         order = sorted((self.p1, self.p2), key=lambda f: f.state == State.KO, reverse=True)
         for f in order:
             self.renderer.draw_fighter(surf, f, ox, oy)
         self.effects.draw_world(surf, ox, oy)  # kivilcim/toz (sarsintiya dahil)
+        self.renderer.draw_foreground(surf, self.cam_x)  # on plan (dovusculerin ONUNDE)
         seconds = -(-self.timer_frames // settings.FPS)  # ceil
         self.hud.draw(surf, seconds, self.wins, self.round_num)
         self.effects.draw_overlay(surf)  # hasar sayilari + KO flash (sarsintisiz)
 
         if self.phase == Phase.INTRO:
-            if self.phase_frame < settings.INTRO_FRAMES * 0.6:
-                self.hud.banner(surf, f"ROUND {self.round_num}")
+            if self.phase_frame < settings.INTRO_FRAMES * 0.62:
+                t = self.phase_frame / (settings.INTRO_FRAMES * 0.62)
+                self.hud.draw_vs(surf, self.p1, self.p2, t)
             else:
                 self.hud.banner(surf, "DÖVÜŞ!")
         elif self.phase == Phase.ROUND_OVER:

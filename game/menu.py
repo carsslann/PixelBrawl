@@ -2,7 +2,7 @@
 
 import pygame
 
-from . import settings, sprites
+from . import audio, settings, sprites
 from .characters import CHARACTERS, CHARACTER_ORDER
 from .controller import DIFFICULTY_LABELS, DIFFICULTY_ORDER
 from .hud import load_font
@@ -38,6 +38,7 @@ class Menu:
                     if e.key == pygame.K_ESCAPE:
                         return None
                     if e.key == pygame.K_RETURN:
+                        audio.play("menu_select")
                         return {
                             "p1": CHARACTER_ORDER[self.p1_idx],
                             "p2": CHARACTER_ORDER[self.p2_idx],
@@ -45,12 +46,16 @@ class Menu:
                         }
                     if e.key in (pygame.K_UP, pygame.K_w):
                         self.selected_row = (self.selected_row - 1) % len(self.rows)
+                        audio.play("menu_move")
                     elif e.key in (pygame.K_DOWN, pygame.K_s):
                         self.selected_row = (self.selected_row + 1) % len(self.rows)
+                        audio.play("menu_move")
                     elif e.key in (pygame.K_LEFT, pygame.K_a):
                         self._change(-1)
+                        audio.play("menu_move")
                     elif e.key in (pygame.K_RIGHT, pygame.K_d):
                         self._change(1)
+                        audio.play("menu_move")
             self._draw(screen)
             pygame.display.flip()
             clock.tick(settings.FPS)

@@ -109,6 +109,32 @@ class HUD:
     # ------------------------------------------------------------------
     # pankartlar
     # ------------------------------------------------------------------
+    def draw_vs(self, surf, p1, p2, t: float):
+        """Round basi VS acilisi: iki isim kenardan kayarak gelir + buyuk VS."""
+        cx = settings.WIDTH // 2
+        cy = settings.HEIGHT // 2 - 20
+        ease = min(1.0, t * 1.4)
+        off = int((1 - ease) ** 2 * 620)
+        for f, side in ((p1, -1), (p2, 1)):
+            nm = self.font_timer.render(f.data.name, True, settings.WHITE)
+            sh = self.font_timer.render(f.data.name, True, settings.BLACK)
+            bar = pygame.Rect(0, 0, nm.get_width() + 44, nm.get_height() + 16)
+            if side < 0:
+                bar.midright = (cx - 66 - off, cy)
+            else:
+                bar.midleft = (cx + 66 + off, cy)
+            pygame.draw.rect(surf, f.data.color, bar, border_radius=10)
+            pygame.draw.rect(surf, settings.WHITE, bar, 3, border_radius=10)
+            surf.blit(sh, sh.get_rect(center=(bar.centerx + 2, bar.centery + 2)))
+            surf.blit(nm, nm.get_rect(center=bar.center))
+        scale = 0.4 + 0.6 * ease
+        vs = pygame.transform.rotozoom(
+            self.font_banner.render("VS", True, settings.HP_MAIN), 0, scale)
+        vsh = pygame.transform.rotozoom(
+            self.font_banner.render("VS", True, settings.BLACK), 0, scale)
+        surf.blit(vsh, vsh.get_rect(center=(cx + 4, cy + 4)))
+        surf.blit(vs, vs.get_rect(center=(cx, cy)))
+
     def banner(self, surf, text: str, sub: str = ""):
         big = self.font_banner.render(text, True, settings.WHITE)
         shadow = self.font_banner.render(text, True, settings.BLACK)

@@ -49,6 +49,10 @@ class Animator:
         self.poses = poses  # State -> (frames_right, frames_left, fps, loop)
 
     def frame_for(self, fighter) -> pygame.Surface | None:
+        if getattr(fighter, "victory", False) and "victory" in self.poses:
+            right, left, fps, _ = self.poses["victory"]
+            idx = int(fighter.state_frame * fps / settings.FPS) % len(right)
+            return right[idx] if fighter.facing >= 0 else left[idx]
         state = fighter.state
         if state == State.HITSTUN and getattr(fighter, "knocked_down", False):
             state = State.KO   # yere serilme: KO (hurt/fallDown) pozlarini kullan
@@ -110,6 +114,17 @@ def load_animator(char_data) -> Animator | None:
         if State.IDLE not in built:
             print(f"[sprite] '{ref.prefix}' idle pozu yok -> prosedurel cizim")
             return None
+        # kazanma pozu (cheer0/cheer1) — durum degil, victory bayragiyla secilir
+        if scale is not None:
+            vf = []
+            for name in ("cheer0", "cheer1"):
+                path = os.path.join(poses_dir, f"{ref.prefix}_{name}.png")
+                if os.path.isfile(path):
+                    img = pygame.image.load(path).convert_alpha()
+                    vf.append(pygame.transform.rotozoom(img, 0, scale))
+            if vf:
+                built["victory"] = (vf, [pygame.transform.flip(f, True, False)
+                                         for f in vf], 3, True)
         return Animator(built)
     except Exception as exc:  # bozuk/eksik dosya oyunu dusurmesin
         print(f"[sprite] '{getattr(ref, 'prefix', '?')}' yuklenemedi: {exc}")
